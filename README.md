@@ -1,0 +1,248 @@
+# Travel Intelligence Agent
+
+> An agentic AI travel planner built with LangGraph, LangChain, and MCP.
+
+## Overview
+
+Travel Intelligence Agent is a web application that helps users research
+and plan trips from natural-language requirements.
+
+Instead of asking the user to search flights, hotels, activities,
+weather, and transportation separately, the system coordinates these
+sources, compares alternatives, builds a personalized itinerary, and
+checks whether the result actually satisfies the user's constraints.
+
+The project is being developed incrementally, starting with a simple
+LLM-based travel planner and progressively adding external MCPs, custom
+tools, LangGraph orchestration, persistence, observability, and
+evaluation.
+
+## What It Does
+
+The final system will be able to:
+
+-   Understand travel preferences and constraints expressed in natural
+    language.
+-   Compare candidate destinations.
+-   Research flights, accommodation, transportation, weather, and
+    activities.
+-   Build a personalized day-by-day itinerary.
+-   Estimate and validate the total trip budget.
+-   Consider practical constraints such as dates and transportation
+    requirements.
+-   Review the generated plan before presenting it.
+-   Replan when the proposed trip does not satisfy the user's
+    requirements.
+-   Provide evidence behind important recommendations.
+
+## Example
+
+**User**
+
+> I want to travel for 10 days in September with my partner, leaving
+> from Madrid. Our budget is €2,500. We like hiking and nature, want to
+> avoid very touristy places, and don't want to rent a car.
+
+**Travel Intelligence Agent**
+
+> I've compared several destinations. Madeira is currently the best
+> match for your requirements.
+>
+> Estimated trip cost: €2,180
+>
+> Why it fits: - Excellent hiking opportunities - Suitable September
+> weather - Within budget - Possible to travel without renting a car
+>
+> Main drawback: some hiking areas have limited public transport.
+>
+> I can now build a 10-day itinerary based on these requirements.
+
+The user can then change a requirement, for example:
+
+> What if we increase the budget to €3,000?
+
+The system can use the existing travel state and replan rather than
+starting from scratch.
+
+## Architecture
+
+The application is built around a small number of focused components:
+
+-   **Travel Planner Agent** --- understands requirements, selects
+    destinations, coordinates research, and builds the travel plan.
+-   **Travel Critic Agent** --- reviews the proposed plan and determines
+    whether it satisfies the user's requirements.
+-   **LangGraph** --- orchestrates the workflow, manages shared state,
+    parallel research, conditional routing, and replanning.
+-   **MCP** --- provides standardized access to external travel
+    capabilities.
+-   **Custom tools** --- handle deterministic application logic such as
+    budget calculation and constraint validation.
+
+The detailed architecture, workflow, persistence model, integrations,
+and design decisions are documented in
+[`architecture.md`](./docs/architecture.md).
+
+## MCP Integrations
+
+The project is intentionally built around a combination of external and
+custom MCP servers.
+
+  -----------------------------------------------------------------------
+  MCP                                 Purpose
+  ----------------------------------- -----------------------------------
+  Weather MCP                         Weather forecasts and historical
+                                      weather
+
+  trvl MCP                            Flights, hotels, trains, buses,
+                                      ferries, and rental cars
+
+  TicketLens MCP                      Activities, attractions, and
+                                      experiences
+
+  Custom Maps MCP                     Geocoding, places, routes,
+                                      distances, and travel times
+  -----------------------------------------------------------------------
+
+The project also uses regular application tools for deterministic
+operations such as budget calculation, constraint validation, and trip
+scoring.
+
+## Tech Stack
+
+  Technology   Role
+  ------------ ----------------------------------
+  Python       Core application
+  LangGraph    Agent orchestration and workflow
+  LangChain    LLM and tool integration
+  MCP          External tool interoperability
+  FastAPI      Backend API
+  Vue.js       Web application
+  MariaDB      Application persistence
+  LangSmith    Observability and evaluation
+
+## Development Progress
+
+The project is developed incrementally. Each phase adds a meaningful
+capability to the system.
+
+### Phase 1 — Initial Travel Agent
+
+- [ ] Create the basic LLM chat loop
+- [ ] Add the initial system prompt
+- [ ] Refine the Travel Planner's personality and tone
+- [ ] Test and refine the agent with realistic travel scenarios
+
+### Phase 2 — Structured Travel State
+
+- [ ] Introduce LangGraph around the existing agent
+- [ ] Define the initial `TravelState`
+- [ ] Add a requirements extraction node
+- [ ] Pass structured requirements to the Travel Planner
+- [ ] Persist the conversation state within a graph execution
+
+### Phase 3 — External Capabilities
+
+- [ ] Integrate the Weather MCP into the existing graph
+- [ ] Use weather data in destination recommendations
+- [ ] Build the custom Maps MCP
+- [ ] Use Maps data to enrich destination information
+- [ ] Integrate the trvl MCP
+- [ ] Use real travel data in the planning process
+- [ ] Integrate the TicketLens MCP
+- [ ] Use activity data in destination recommendations
+
+### Phase 4 — Destination Research
+
+- [ ] Generate a shortlist of candidate destinations
+- [ ] Research each candidate using the available MCPs
+- [ ] Score and compare candidate destinations
+- [ ] Select the best destination for the user's requirements
+- [ ] Return the destination recommendation with supporting evidence
+
+### Phase 5 — Parallel Trip Research
+
+- [ ] Create independent research nodes for flights, hotels, activities, and transportation
+- [ ] Execute the research nodes in parallel
+- [ ] Collect and normalize their results in the graph state
+- [ ] Build a unified research context for the selected destination
+
+### Phase 6 — Plan & Budget
+
+- [ ] Generate a complete itinerary from the research results
+- [ ] Add deterministic budget calculation
+- [ ] Add hard-constraint validation
+- [ ] Add trip scoring and plan selection
+- [ ] Generate the final plan with supporting evidence
+
+### Phase 7 — Critic & Replanning
+
+- [ ] Add the Travel Critic Agent
+- [ ] Connect the critic to the generated travel plan
+- [ ] Route valid plans to the final response
+- [ ] Route invalid plans back to the Travel Planner
+- [ ] Implement bounded replanning
+- [ ] Test the planner with conflicting and unsatisfied requirements
+
+### Phase 8 — Persistence & Web Application
+
+- [ ] Persist users, sessions, requirements, research, and itineraries in MariaDB
+- [ ] Add LangGraph checkpointing
+- [ ] Expose the planning workflow through FastAPI
+- [ ] Build the Vue.js chat interface
+- [ ] Add itinerary, budget, map, and evidence views
+
+### Phase 9 — Observability & Evaluation
+
+- [ ] Integrate LangSmith tracing
+- [ ] Create a representative evaluation dataset
+- [ ] Add automated evaluation of generated plans
+- [ ] Evaluate constraint satisfaction and recommendation quality
+- [ ] Evaluate groundedness and replanning behavior
+- [ ] Measure latency, token usage, and tool usage
+
+### Phase 10 — Polish & Release
+
+- [ ] Add unit and integration tests
+- [ ] Improve error handling and edge cases
+- [ ] Optimize latency and cost
+- [ ] Complete documentation
+- [ ] Add deployment configuration
+- [ ] Deploy a public demo
+- [ ] Publish the first release
+
+**Current phase:** Phase 1 --- Initial Travel Agent
+
+## Project Structure
+
+The repository structure will evolve as development progresses. The
+intended high-level structure is:
+
+``` text
+travel-intelligence-agent/
+├── backend/
+├── frontend/
+├── mcp/
+├── tests/
+├── evaluation/
+├── docs/
+├── architecture.md
+├── README.md
+└── ...
+```
+
+## Documentation
+
+-   [`architecture.md`](./architecture.md) --- system architecture,
+    agents, LangGraph workflow, MCPs, persistence, frontend,
+    observability, evaluation, and development phases.
+
+## Project Status
+
+This project is under active development. The architecture is defined,
+but implementation is being built incrementally so that each major
+capability can be developed and evaluated independently.
+
+## License
+
+To be defined.
