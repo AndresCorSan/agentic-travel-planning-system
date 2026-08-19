@@ -88,21 +88,12 @@ and design decisions are documented in
 The project is intentionally built around a combination of external and
 custom MCP servers.
 
-  -----------------------------------------------------------------------
-  MCP                                 Purpose
-  ----------------------------------- -----------------------------------
-  Weather MCP                         Weather forecasts and historical
-                                      weather
-
-  trvl MCP                            Flights, hotels, trains, buses,
-                                      ferries, and rental cars
-
-  TicketLens MCP                      Activities, attractions, and
-                                      experiences
-
-  Custom Maps MCP                     Geocoding, places, routes,
-                                      distances, and travel times
-  -----------------------------------------------------------------------
+| MCP | Purpose |
+|---|---|
+| Weather MCP | Weather forecasts and historical weather |
+| trvl MCP | Flights, hotels, trains, buses, ferries, and rental cars |
+| TicketLens MCP | Activities, attractions, and experiences |
+| Custom Maps MCP | Geocoding, places, routes, distances, and travel times |
 
 The project also uses regular application tools for deterministic
 operations such as budget calculation, constraint validation, and trip
@@ -110,16 +101,16 @@ scoring.
 
 ## Tech Stack
 
-  Technology   Role
-  ------------ ----------------------------------
-  Python       Core application
-  LangGraph    Agent orchestration and workflow
-  LangChain    LLM and tool integration
-  MCP          External tool interoperability
-  FastAPI      Backend API
-  Vue.js       Web application
-  MariaDB      Application persistence
-  LangSmith    Observability and evaluation
+| Technology | Role |
+|---|---|
+| Python | Core application |
+| LangGraph | Agent orchestration and workflow |
+| LangChain | LLM and tool integration |
+| MCP | External tool interoperability |
+| FastAPI | Backend API |
+| Vue.js | Web application |
+| MariaDB | Application persistence |
+| LangSmith | Observability and evaluation |
 
 ## Development Progress
 
