@@ -119,10 +119,10 @@ capability to the system.
 
 ### Phase 1 — Initial Travel Agent
 
-- [ ] Create the basic LLM chat loop
-- [ ] Add the initial system prompt
-- [ ] Refine the Travel Planner's personality and tone
-- [ ] Test and refine the agent with realistic travel scenarios
+- [x] Create the basic LLM chat loop
+- [x] Add the initial system prompt
+- [x] Refine the Travel Planner's personality and tone
+- [x] Test and refine the agent with realistic travel scenarios
 
 ### Phase 2 — Structured Travel State
 
