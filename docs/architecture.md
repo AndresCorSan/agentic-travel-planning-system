@@ -340,9 +340,9 @@ Key metrics:
 - Test with realistic travel scenarios.
 
 ### Phase 2 — Structured Travel State
-- Introduce LangGraph.
 - Define the shared `TravelState`.
 - Extract and maintain structured user requirements.
+- Update the `TravelState` accross interactions.
 
 ### Phase 3 — External Capabilities
 - Integrate Weather MCP.

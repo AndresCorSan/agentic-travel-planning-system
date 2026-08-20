@@ -126,11 +126,12 @@ capability to the system.
 
 ### Phase 2 — Structured Travel State
 
-- [ ] Introduce LangGraph around the existing agent
-- [ ] Define the initial `TravelState`
-- [ ] Add a requirements extraction node
-- [ ] Pass structured requirements to the Travel Planner
-- [ ] Persist the conversation state within a graph execution
+- [x] Define the initial `TravelState`
+- [x] Make the Travel Planner produce structured requirements
+- [x] Store the structured requirements in the graph state
+- [x] Add LangGraph checkpointing
+- [x] Verify that travel state persists across interactions
+- [x] Verify that travel state updates when needed
 
 ### Phase 3 — External Capabilities
 
