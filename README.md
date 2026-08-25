@@ -135,8 +135,8 @@ capability to the system.
 
 ### Phase 3 — External Capabilities
 
-- [ ] Integrate the Weather MCP into the existing graph
-- [ ] Use weather data in destination recommendations
+- [x] Integrate the Weather MCP into the existing graph
+- [x] Use weather data in destination recommendations
 - [ ] Build the custom Maps MCP
 - [ ] Use Maps data to enrich destination information
 - [ ] Integrate the trvl MCP
