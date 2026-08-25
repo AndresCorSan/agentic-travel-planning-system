@@ -141,8 +141,8 @@ capability to the system.
 - [ ] Use Maps data to enrich destination information
 - [ ] Integrate the trvl MCP
 - [ ] Use real travel data in the planning process
-- [ ] Integrate the TicketLens MCP
-- [ ] Use activity data in destination recommendations
+- [x] Integrate the TicketLens MCP
+- [x] Use activity data in destination recommendations
 
 ### Phase 4 — Destination Research
 
@@ -203,8 +203,6 @@ capability to the system.
 - [ ] Deploy a public demo
 - [ ] Publish the first release
 
-**Current phase:** Phase 1 --- Initial Travel Agent
-
 ## Project Structure
 
 The repository structure will evolve as development progresses. The
@@ -212,13 +210,13 @@ intended high-level structure is:
 
 ``` text
 travel-intelligence-agent/
-├── backend/
-├── frontend/
+├── src/
+|   ├── frontend/
+|   └── backend/
 ├── mcp/
 ├── tests/
 ├── evaluation/
 ├── docs/
-├── architecture.md
 ├── README.md
 └── ...
 ```
