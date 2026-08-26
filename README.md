@@ -139,8 +139,8 @@ capability to the system.
 - [x] Use weather data in destination recommendations
 - [ ] Build the custom Maps MCP
 - [ ] Use Maps data to enrich destination information
-- [ ] Integrate the trvl MCP
-- [ ] Use real travel data in the planning process
+- [x] Integrate the trvl MCP
+- [x] Use real travel data in the planning process
 - [x] Integrate the TicketLens MCP
 - [x] Use activity data in destination recommendations
 
