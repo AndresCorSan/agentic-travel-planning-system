@@ -211,7 +211,6 @@ Main capabilities:
 * Trains
 * Buses
 * Ferries
-* Rental cars
 
 #### [TicketLens MCP](https://github.com/ticketlens/ticketlens-experiences-mcp)
 
@@ -222,6 +221,15 @@ Main capabilities:
 * Search activities
 * Search attractions and experiences
 * Retrieve activity details
+
+#### [OctoTrip Rental Cars MCP](https://github.com/OctoTrip/rental-cars)
+
+Provides rental car information for destinations.
+
+Main capabilities:
+
+* Search rental cars
+* Compare rental offers and prices
 
 ---
 

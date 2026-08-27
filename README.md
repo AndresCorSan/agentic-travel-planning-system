@@ -143,6 +143,8 @@ capability to the system.
 - [x] Use real travel data in the planning process
 - [x] Integrate the TicketLens MCP
 - [x] Use activity data in destination recommendations
+- [x] Integrate the OctoTrip Rental Cars MCP
+- [x] Use rental car data in destination recommendations
 
 ### Phase 4 — Destination Research
 
