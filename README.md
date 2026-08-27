@@ -137,8 +137,6 @@ capability to the system.
 
 - [x] Integrate the Weather MCP into the existing graph
 - [x] Use weather data in destination recommendations
-- [ ] Build the custom Maps MCP
-- [ ] Use Maps data to enrich destination information
 - [x] Integrate the trvl MCP
 - [x] Use real travel data in the planning process
 - [x] Integrate the TicketLens MCP

@@ -233,25 +233,6 @@ Main capabilities:
 
 ---
 
-### Custom MCP
-
-#### Maps MCP
-
-A custom MCP server developed specifically for the project.
-
-It provides:
-
-* Geocoding
-* Place search
-* Route calculation
-* Distance calculation
-* Travel-time estimation
-
-The MCP will use open geographic data and routing services such as
-**OpenStreetMap/Nominatim** and **OSRM**.
-
----
-
 ### Custom Tools
 
 Some capabilities do not require MCP and will be implemented as regular
