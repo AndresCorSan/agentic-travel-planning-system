@@ -146,7 +146,8 @@ capability to the system.
 
 ### Phase 4 — Destination Research
 
-- [x] Add an initial router for deciding whether destination research is needed
+- [x] Add an initial requirements extraction node
+- [x] Add router node for deciding whether destination research is needed
 - [ ] Generate a shortlist of candidate destinations
 - [ ] Research each candidate using the available MCPs only when needed
 - [ ] Score and compare candidate destinations
