@@ -148,11 +148,9 @@ capability to the system.
 
 - [x] Add an initial requirements extraction node
 - [x] Add router node for deciding whether destination research is needed
-- [ ] Generate a shortlist of candidate destinations
-- [ ] Research each candidate using the available MCPs only when needed
-- [ ] Score and compare candidate destinations
-- [ ] Select the best destination for the user's requirements
-- [ ] Return the destination recommendation with supporting evidence
+- [x] Generate a shortlist of candidate destinations
+- [x] Score and compare candidate destinations
+- [x] Let the user select one of those destinations
 
 ### Phase 5 — Parallel Trip Research
 
