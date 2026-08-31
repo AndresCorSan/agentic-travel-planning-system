@@ -345,9 +345,10 @@ Key metrics:
 - Research and compare destinations.
 - Select the most suitable destination.
 
-### Phase 5 — Parallel Trip Research
-- Research flights, hotels, activities, and transportation in parallel.
-- Combine research results into a unified trip context.
+### Phase 5 — Parallel Multi-Agent Research
+- Orchestrate specialized travel-research agents.
+- Execute selected agents in parallel and collect their results.
+- Synthesize specialist research with the main Travel Planner.
 
 ### Phase 6 — Plan & Budget
 - Generate the complete itinerary.

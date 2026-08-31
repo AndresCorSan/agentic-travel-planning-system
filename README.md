@@ -152,12 +152,11 @@ capability to the system.
 - [x] Score and compare candidate destinations
 - [x] Let the user select one of those destinations
 
-### Phase 5 — Parallel Trip Research
+### Phase 5 — Parallel Multi-Agent Research
 
-- [ ] Create independent research nodes for flights, hotels, activities, and transportation
-- [ ] Execute the research nodes in parallel
-- [ ] Collect and normalize their results in the graph state
-- [ ] Build a unified research context for the selected destination
+- [x] Orchestrate specialized travel-research subagents and execute them in parallel
+- [x] Implement iterative MCP tool use within each subagent and store their results in the shared state
+- [x] Pass the available research results to the main LLM for final synthesis
 
 ### Phase 6 — Plan & Budget
 
