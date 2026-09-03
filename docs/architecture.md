@@ -351,20 +351,32 @@ Key metrics:
 - Synthesize specialist research with the main Travel Planner.
 
 ### Phase 6 — Plan & Budget
-- Generate the complete itinerary.
+- Define the structured travel-plan representation.
+- Generate a complete itinerary from the research results.
 - Implement deterministic budget calculation.
-- Implement constraint validation and trip scoring.
+- Implement constraint validation.
+- Implement trip scoring and plan selection.
 
 ### Phase 7 — Critic & Replanning
 - Introduce the Travel Critic Agent.
-- Add conditional routing and replanning loops.
-- Implement bounded retry/replanning logic.
+- Evaluate generated travel plans against requirements.
+- Add conditional routing and bounded replanning loops.
+- Refine plans when constraints are violated or recommendations are weak.
 
-### Phase 8 — Persistence & Web Application
+### Phase 8 — Conversational Web Prototype
+- Expose the LangGraph workflow through a minimal web interface.
+- Build a conversational chat interface for multi-turn planning.
+- Support LangGraph interrupts, resume, and thread-based conversations.
+- Display the current travel requirements and planning state for debugging.
+- Display itinerary, budget, validation, and research results.
+- Use the prototype as the main environment for end-to-end testing.
+
+### Phase 9 — Persistence & Production Backend
 - Add MariaDB persistence.
-- Add LangGraph checkpointing.
-- Build the FastAPI backend.
-- Build the Vue.js frontend.
+- Integrate production-oriented LangGraph checkpointing.
+- Persist users, sessions, requirements, research, and itineraries.
+- Build the production FastAPI backend.
+- Connect the web application to persistent data.
 
 ### Phase 9 — Observability & Evaluation
 - Integrate LangSmith.
@@ -372,8 +384,15 @@ Key metrics:
 - Measure constraint satisfaction, groundedness,
   recommendation quality, and replanning success.
 
-### Phase 10 — Polish & Release
-- Improve documentation and architecture diagrams.
-- Add tests and deployment configuration.
-- Publish the project with a reproducible setup and demo.
+### Phase 10 — Observability, Evaluation & Release
+- Integrate LangSmith tracing.
+- Build an evaluation dataset.
+- Measure constraint satisfaction, groundedness, recommendation quality,
+  replanning success, latency, token usage, and tool usage.
+- Add unit and integration tests.
+- Improve error handling and edge cases.
+- Optimize latency and cost.
+- Complete documentation and architecture diagrams.
+- Add deployment configuration.
+- Deploy and publish the project.
 

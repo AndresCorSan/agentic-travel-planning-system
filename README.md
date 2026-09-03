@@ -160,11 +160,11 @@ capability to the system.
 
 ### Phase 6 — Plan & Budget
 
+- [ ] Define the structured travel-plan representation
 - [ ] Generate a complete itinerary from the research results
 - [ ] Add deterministic budget calculation
 - [ ] Add hard-constraint validation
 - [ ] Add trip scoring and plan selection
-- [ ] Generate the final plan with supporting evidence
 
 ### Phase 7 — Critic & Replanning
 
@@ -175,15 +175,24 @@ capability to the system.
 - [ ] Implement bounded replanning
 - [ ] Test the planner with conflicting and unsatisfied requirements
 
-### Phase 8 — Persistence & Web Application
+### Phase 8 — Conversational Web Prototype
+
+- [ ] Expose the LangGraph workflow through a minimal web interface
+- [ ] Build the conversational chat interface
+- [ ] Support multi-turn conversations and LangGraph interrupts/resume
+- [ ] Support thread-based conversations
+- [ ] Display current travel requirements and planning state
+- [ ] Display itinerary and budget information
+- [ ] Display validation, scoring, and research results
+
+### Phase 9 — Persistence & Production Backend
 
 - [ ] Persist users, sessions, requirements, research, and itineraries in MariaDB
-- [ ] Add LangGraph checkpointing
+- [ ] Add production-oriented LangGraph checkpointing
 - [ ] Expose the planning workflow through FastAPI
-- [ ] Build the Vue.js chat interface
-- [ ] Add itinerary, budget, map, and evidence views
+- [ ] Connect the web application to persistent backend data
 
-### Phase 9 — Observability & Evaluation
+### Phase 10 — Observability, Evaluation & Release
 
 - [ ] Integrate LangSmith tracing
 - [ ] Create a representative evaluation dataset
@@ -191,13 +200,10 @@ capability to the system.
 - [ ] Evaluate constraint satisfaction and recommendation quality
 - [ ] Evaluate groundedness and replanning behavior
 - [ ] Measure latency, token usage, and tool usage
-
-### Phase 10 — Polish & Release
-
 - [ ] Add unit and integration tests
 - [ ] Improve error handling and edge cases
 - [ ] Optimize latency and cost
-- [ ] Complete documentation
+- [ ] Complete documentation and architecture diagrams
 - [ ] Add deployment configuration
 - [ ] Deploy a public demo
 - [ ] Publish the first release
