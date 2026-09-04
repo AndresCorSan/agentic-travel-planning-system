@@ -1,0 +1,241 @@
+/* Global stylesheet: base tokens + layout vars, shared component patterns
+   (collapsibles, popover rows, prose, budget bits), PrimeVue dark-mode
+   repairs and overlay overrides. Component-specific styles live in each
+   .vue file. */
+
+:root {
+  --app-max-chat-width: 46rem;
+  --app-sidebar-width: 264px;
+  --app-sidebar-collapsed: 64px;
+  --app-state-width: 320px;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 14.5px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  background: var(--p-surface-0);
+  color: var(--p-surface-950);
+}
+
+a {
+  color: var(--p-primary-600);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+.muted {
+  color: var(--p-surface-500);
+}
+.meta {
+  font-size: 0.78rem;
+  color: var(--p-surface-500);
+}
+
+.page-empty {
+  max-width: var(--app-max-chat-width);
+  margin: 8vh auto;
+  text-align: center;
+  color: var(--p-surface-500);
+}
+
+/* Thin quiet scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--p-surface-300) transparent;
+}
+
+/* ------------------------------------------------------------------
+   Dark-mode repairs. Our custom surface scale is dark-anchored at low
+   steps, which flips several PrimeVue scheme tokens (surface-0/800/900).
+   Fix the fallout for PrimeVue overlays/inputs/text buttons here.
+   Custom selected/active states are fixed inside their own SFCs.
+------------------------------------------------------------------- */
+.dark .p-popover {
+  /* Vars (not the panel properties) drive the panel AND the :before/:after arrow. */
+  --p-popover-background: #1c2029;
+  --p-popover-border-color: #2f3541;
+  --p-popover-color: #eef0f4;
+}
+.dark .p-dialog,
+.dark .p-drawer,
+.dark .p-confirmdialog {
+  background: #1c2029;
+  border-color: #2f3541;
+  color: #eef0f4;
+}
+.p-confirmdialog-icon {
+  color: var(--p-amber-500);
+}
+.dark .p-confirmdialog-icon {
+  color: var(--p-amber-400);
+}
+.dark .p-inputtext,
+.dark .p-textarea {
+  background: #1c2029;
+  border-color: #3d4452;
+  color: #eef0f4;
+}
+.dark .p-inputtext::placeholder,
+.dark .p-textarea::placeholder {
+  color: #8b93a7;
+}
+.dark .p-button-text.p-button-secondary {
+  color: #aab1c2;
+}
+.dark .p-button-text.p-button-secondary:not(:disabled):hover {
+  background: var(--p-surface-100);
+  color: #e2e5ec;
+}
+.dark .p-toast-detail {
+  color: #e2e5ec;
+}
+
+/* Conversation options popover: narrower panel, tighter padding. */
+.conv-opts {
+  margin-left: -10px;
+}
+.conv-opts .p-popover-content {
+  padding: 6px;
+}
+.dark .conv-opts .opt-row:not(.danger) i {
+  color: inherit;
+}
+.dark .conv-opts .opt-row.danger,
+.dark .conv-opts .opt-row.danger i,
+.dark .conv-opts .opt-row.danger:hover,
+.dark .conv-opts .opt-row.danger:hover i {
+  color: var(--p-red-400);
+}
+
+/* ------------------------------------------------------------------
+   Shared: collapsible sections (sidebar groups, travel-state sections).
+   Height animates via the grid-template-rows 1fr <-> 0fr trick, which
+   transitions smoothly where height:auto cannot. Pair with
+   useLocalStorageToggle() so open state persists across reloads.
+------------------------------------------------------------------- */
+.toggle-ic {
+  transition: transform 0.25s ease;
+}
+.toggle-ic.closed {
+  transform: rotate(-90deg);
+}
+.collapse {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.collapse.closed {
+  grid-template-rows: 0fr;
+}
+.collapse > .clip {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ------------------------------------------------------------------
+   Shared: popover rows (sidebar rail popovers, accent picker, options).
+   Same look everywhere: title, reset list, hoverable rows.
+------------------------------------------------------------------- */
+.pop-title {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--p-surface-500);
+  margin: 0 0 8px;
+}
+.pop-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pop-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  background: none;
+  color: inherit;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+}
+.pop-row:hover {
+  background: var(--p-surface-100);
+}
+.pop-row.sel {
+  background: var(--p-primary-50);
+  color: var(--p-primary-700);
+}
+
+/* ------------------------------------------------------------------
+   Shared: rich assistant text (v-html content is unscoped by nature,
+   so these live here instead of in each component).
+------------------------------------------------------------------- */
+.prose {
+  font-size: 0.92rem;
+}
+.prose p {
+  margin: 0 0 8px;
+}
+.prose .subhead {
+  font-weight: 600;
+  margin-top: 12px;
+}
+.prose ul {
+  margin: 4px 0 10px;
+  padding-left: 20px;
+}
+.prose li {
+  margin: 2px 0;
+}
+
+/* ------------------------------------------------------------------
+   Shared: budget bits (travel-state panel + chat budget card).
+------------------------------------------------------------------- */
+.bar {
+  height: 6px;
+  margin: 8px 0;
+}
+.ok {
+  color: var(--p-green-600);
+}
+.dark .ok {
+  color: var(--p-green-400);
+}
+
+/* ------------------------------------------------------------------
+   Dark selected states. NOTE: `html.dark` (not just `.dark`) on purpose:
+   the light rules they override live in scoped SFC styles, which come
+   later in the bundle — a specificity tie would lose to them.
+------------------------------------------------------------------- */
+html.dark .row.active,
+html.dark .rail-btn.active,
+html.dark .pop-row.sel {
+  background: color-mix(in srgb, var(--p-primary-500) 25%, transparent);
+  color: var(--p-primary-300);
+}
+html.dark .user-bubble {
+  background: color-mix(in srgb, var(--p-primary-500) 22%, transparent);
+  border-color: color-mix(in srgb, var(--p-primary-500) 42%, transparent);
+}
+html.dark .float-composer {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+html.dark .float-composer:focus-within {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 2px color-mix(in srgb, var(--p-primary-500) 35%, transparent);
+}

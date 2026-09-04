@@ -1,0 +1,170 @@
+import {
+  conversations,
+  destinations,
+  itineraryText,
+  lisbonOptions,
+  messages,
+  savedPlans,
+  weatherText
+} from '../mocks/data';
+import type {
+  BudgetSummary,
+  ChatMessage,
+  Conversation,
+  ResearchStatus,
+  RequirementItem,
+  SavedPlan
+} from '../types';
+
+// ---------------------------------------------------------------------------
+// Mock implementation of the future FastAPI contract.
+// UI code talks to these functions, never to mocks/ directly.
+// Later: replace bodies with `api.get/post(...)` calls, keep signatures.
+// ---------------------------------------------------------------------------
+
+const delay = (ms = 700) => new Promise((r) => setTimeout(r, ms));
+
+let msgCounter = 100;
+const extraMessages: Record<string, ChatMessage> = {};
+
+export async function listConversations(): Promise<Conversation[]> {
+  return [...conversations];
+}
+
+export async function getMessages(ids: string[]): Promise<ChatMessage[]> {
+  return ids.map((id) => extraMessages[id] ?? messages[id]).filter(Boolean);
+}
+
+export async function listSavedPlans(): Promise<SavedPlan[]> {
+  return [...savedPlans];
+}
+
+export interface MockSendResult {
+  user: ChatMessage;
+  replies: ChatMessage[];
+  destinationChosen?: string;
+}
+
+export async function sendMessage(conversationId: string, text: string): Promise<MockSendResult> {
+  await delay();
+  const user: ChatMessage = {
+    id: `u${++msgCounter}`,
+    role: 'user',
+    kind: 'text',
+    text,
+    createdAt: 'now'
+  };
+  const lowered = text.toLowerCase();
+  const replies: ChatMessage[] = [];
+  let destinationChosen: string | undefined;
+
+  if (/(lisbon|lisboa)/.test(lowered)) {
+    destinationChosen = 'Lisbon';
+    replies.push({
+      id: `a${++msgCounter}`,
+      role: 'assistant',
+      kind: 'text',
+      text: 'Lisbon locked in. I updated your requirements and refreshed research — see the Travel State panel. Anything you want to change: dates, hotel level, or rental-car days?',
+      createdAt: 'now'
+    });
+  } else if (/budget|3000|price|cost/.test(lowered)) {
+    replies.push({
+      id: `a${++msgCounter}`,
+      role: 'assistant',
+      kind: 'budget',
+      ref: 'lisbon-budget',
+      text: 'Recomputed with your note — still comfortably inside budget:',
+      createdAt: 'now'
+    });
+  } else if (/weather/.test(lowered)) {
+    // Plain text for now; 'weather' MessageKind is reserved for a rich card.
+    replies.push({
+      id: `a${++msgCounter}`,
+      role: 'assistant',
+      kind: 'text',
+      text: weatherText,
+      createdAt: 'now'
+    });
+  } else if (/plan|itinerary|day/.test(lowered)) {
+    replies.push({
+      id: `a${++msgCounter}`,
+      role: 'assistant',
+      kind: 'itinerary',
+      ref: 'lisbon-plan',
+      createdAt: 'now'
+    });
+  } else {
+    replies.push({
+      id: `a${++msgCounter}`,
+      role: 'assistant',
+      kind: 'text',
+      text: 'Noted. I updated the draft requirements (mock). Tell me dates, budget shifts, or pick a destination and I will refresh research accordingly.',
+      createdAt: 'now'
+    });
+  }
+  for (const m of [user, ...replies]) extraMessages[m.id] = m;
+  // Unused in the mock; the backend will scope replies by conversation.
+  void conversationId;
+  return { user, replies, destinationChosen };
+}
+
+export async function chooseDestination(destinationId: string): Promise<MockSendResult> {
+  await delay();
+  const dest = destinations.find((d) => d.id === destinationId);
+  const name = dest?.name ?? 'Lisbon';
+  const user: ChatMessage = {
+    id: `u${++msgCounter}`,
+    role: 'user',
+    kind: 'text',
+    text: `Let's go with ${name}.`,
+    createdAt: 'now'
+  };
+  const replies: ChatMessage[] = [
+    {
+      id: `a${++msgCounter}`,
+      role: 'assistant',
+      kind: 'text',
+      text: `${name} locked in. I pulled flights, hotel, transport, activities and rental options plus the September weather outlook:`,
+      createdAt: 'now'
+    },
+    { id: `a${++msgCounter}`, role: 'assistant', kind: 'options', ref: 'lisbon-options', createdAt: 'now' },
+    { id: `a${++msgCounter}`, role: 'assistant', kind: 'budget', ref: 'lisbon-budget', createdAt: 'now' }
+  ];
+  for (const m of [user, ...replies]) extraMessages[m.id] = m;
+  return { user, replies, destinationChosen: name };
+}
+
+export function getDestinations() {
+  return destinations;
+}
+
+export function getLisbonOptions() {
+  return lisbonOptions;
+}
+
+export function getItineraryText() {
+  return itineraryText;
+}
+
+export function baseRequirements(destination: string | null): RequirementItem[] {
+  return [
+    { key: 'destination', label: 'Destination', value: destination, confirmed: !!destination },
+    { key: 'origin', label: 'Origin', value: 'Madrid', confirmed: true },
+    { key: 'dates', label: 'Dates', value: 'September 2026', confirmed: true },
+    { key: 'exact-dates', label: 'Exact travel dates', value: null, confirmed: false },
+    { key: 'duration', label: 'Duration', value: '7 days', confirmed: true },
+    { key: 'travelers', label: 'Travelers', value: '2', confirmed: true },
+    { key: 'budget', label: 'Budget', value: '€1,500', confirmed: true },
+    { key: 'interests', label: 'Interests', value: 'Food, culture', confirmed: true },
+    { key: 'transport', label: 'Transport', value: 'Flight or train', confirmed: true },
+    { key: 'rental', label: 'Rental car', value: 'Yes', confirmed: true }
+  ];
+}
+
+export function fullResearch(): ResearchStatus {
+  return { weather: true, transportation: true, accommodation: true, activities: true, rentalCar: true };
+}
+
+export function lisbonBudget(): BudgetSummary {
+  return { estimated: 1240, budget: 1500, currency: '€' };
+}

@@ -177,6 +177,7 @@ capability to the system.
 
 ### Phase 8 — Conversational Web Prototype
 
+- [x] Create initial frontend prototype
 - [ ] Expose the LangGraph workflow through a minimal web interface
 - [ ] Build the conversational chat interface
 - [ ] Support multi-turn conversations and LangGraph interrupts/resume
