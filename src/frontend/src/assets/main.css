@@ -207,7 +207,8 @@ a:hover {
 /* ------------------------------------------------------------------
    Shared: budget bits (travel-state panel + chat budget card).
 ------------------------------------------------------------------- */
-.bar {
+/* NOTE: anchored to .p-progressbar so it beats PrimeVue's injected height. */
+.p-progressbar.bar {
   height: 6px;
   margin: 8px 0;
 }
@@ -234,8 +235,9 @@ html.dark .user-bubble {
   border-color: color-mix(in srgb, var(--p-primary-500) 42%, transparent);
 }
 html.dark .float-composer {
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  /* No shadow in dark mode: it rendered as a faint halo around the box. */
+  box-shadow: none;
 }
 html.dark .float-composer:focus-within {
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 2px color-mix(in srgb, var(--p-primary-500) 35%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--p-primary-500) 35%, transparent);
 }

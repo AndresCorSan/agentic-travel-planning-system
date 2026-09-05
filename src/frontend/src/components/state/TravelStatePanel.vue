@@ -122,13 +122,14 @@ const fmt = (n: number) => `${travel.budget.currency}${n.toLocaleString()}`;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-weight: 600;
-  padding: 2px 0;
+  padding: 6px 8px;
   margin-bottom: 10px;
   border-radius: 6px;
   cursor: pointer;
   text-align: left;
 }
 .sec-toggle:hover {
+  background: var(--p-surface-100);
   color: inherit;
 }
 .sec-toggle i {
