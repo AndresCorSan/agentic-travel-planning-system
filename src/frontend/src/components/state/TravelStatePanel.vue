@@ -20,13 +20,13 @@ const confirmed = computed(() => travel.requirements.filter((r) => r.value));
 const missing = computed(() => travel.requirements.filter((r) => !r.value));
 
 const researchRows = computed(() => [
-  { label: 'Weather', done: travel.research.weather },
-  { label: 'Transportation', done: travel.research.transportation },
-  { label: 'Accommodation', done: travel.research.accommodation },
-  { label: 'Activities', done: travel.research.activities },
-  { label: 'Rental car', done: travel.research.rentalCar }
+  { label: 'Weather', state: travel.research.weather },
+  { label: 'Transportation', state: travel.research.transportation },
+  { label: 'Accommodation', state: travel.research.accommodation },
+  { label: 'Activities', state: travel.research.activities },
+  { label: 'Rental car', state: travel.research.rentalCar }
 ]);
-const researchDone = computed(() => researchRows.value.filter((r) => r.done).length);
+const researchDone = computed(() => researchRows.value.filter((r) => r.state === 'done').length);
 
 // Flat budget rows (unlike BudgetSummary's card, which suits the chat).
 const pct = computed(() =>
@@ -69,7 +69,9 @@ const fmt = (n: number) => `${travel.budget.currency}${n.toLocaleString()}`;
         <div class="clip">
       <ul class="research">
         <li v-for="r in researchRows" :key="r.label">
-          <i :class="r.done ? 'pi pi-check-circle ok' : 'pi pi-circle muted'" />
+          <i v-if="r.state === 'done'" class="pi pi-check-circle ok" />
+          <i v-else-if="r.state === 'active'" class="pi pi-spin pi-spinner active" />
+          <i v-else class="pi pi-circle muted" />
           {{ r.label }}
         </li>
       </ul>
@@ -192,6 +194,9 @@ dl {
 }
 .research i {
   margin-right: 8px;
+}
+.research .active {
+  color: var(--p-primary-500);
 }
 /* Flat budget rows (.ok highlight + .bar in main.css) */
 .budget-rows .row {

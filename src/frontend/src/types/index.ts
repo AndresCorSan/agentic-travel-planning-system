@@ -38,12 +38,34 @@ export interface RequirementItem {
 }
 
 export interface ResearchStatus {
-  weather: boolean;
-  transportation: boolean;
-  accommodation: boolean;
-  activities: boolean;
-  rentalCar: boolean;
+  weather: ResearchState;
+  transportation: ResearchState;
+  accommodation: ResearchState;
+  activities: ResearchState;
+  rentalCar: ResearchState;
 }
+
+export type ResearchState = 'pending' | 'active' | 'done';
+
+export type ResearchKey = 'weather' | 'transportation' | 'accommodation' | 'activities' | 'rentalCar';
+
+export interface AgentRow {
+  id: string;
+  label: string;
+  state: 'active' | 'done';
+}
+
+// Server-sent events for POST /conversations/{id}/messages (streaming).
+export type StreamEvent =
+  | { type: 'status'; text: string }
+  | { type: 'agents.start'; agents: string[] }
+  | { type: 'agent.done'; id: string }
+  | { type: 'research.update'; key: ResearchKey; state: ResearchState }
+  | { type: 'requirements.updated'; requirements: RequirementItem[] }
+  | { type: 'token'; text: string }
+  | { type: 'message'; message: ChatMessage }
+  | { type: 'done' }
+  | { type: 'error'; message: string };
 
 export interface BudgetSummary {
   estimated: number;

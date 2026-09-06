@@ -44,6 +44,9 @@ function onChoose(id: string, name: string) {
         <MessageList
           :messages="travel.messages"
           :loading="travel.loading"
+          :status-text="travel.streamStatus"
+          :agents="travel.agentRows"
+          :streaming="travel.streaming"
           :chosen-destination="chosenDestination"
           @choose="onChoose"
         />

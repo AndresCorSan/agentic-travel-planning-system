@@ -4,24 +4,47 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import * as service from '../api/travelService';
-import type { BudgetSummary, ChatMessage, Conversation, ResearchStatus, RequirementItem, SavedPlan } from '../types';
+import { AGENT_LABELS, AGENT_RESEARCH_KEY } from '../api/stream';
+import type { AgentRow, BudgetSummary, ChatMessage, Conversation, ResearchStatus, RequirementItem, SavedPlan, StreamEvent } from '../types';
 
 export const useTravelStore = defineStore('travel', () => {
+  const BACKEND_MODE = import.meta.env.VITE_USE_BACKEND === 'true';
   const conversationId = ref<string>('lisbon-trip');
   const messageIds = ref<string[]>([]);
   const cache = ref<Record<string, ChatMessage>>({});
   const loading = ref(false);
-  const requirements = ref<RequirementItem[]>(service.baseRequirements('Lisbon'));
-  const research = ref<ResearchStatus>(service.fullResearch());
+  // Backend mode: the panel starts blank; `requirements.updated` /
+  // `research.update` stream events are the only writers. Mock mode keeps
+  // the Lisbon snapshot so the UI demo works offline.
+  const requirements = ref<RequirementItem[]>(
+    BACKEND_MODE ? service.emptyRequirements() : service.baseRequirements('Lisbon')
+  );
+  const research = ref<ResearchStatus>(BACKEND_MODE ? service.emptyResearch() : service.fullResearch());
   // Static mock snapshot (never reassigned yet); the backend will own it.
-  const budget = ref<BudgetSummary>(service.lisbonBudget());
+  const budget = ref<BudgetSummary>(BACKEND_MODE ? service.emptyBudget() : service.lisbonBudget());
 
   const messages = computed(() => messageIds.value.map((id) => cache.value[id]).filter(Boolean));
+
+  // Live streaming state (Fase A: driven by streamMock, later by SSE).
+  const streamStatus = ref('Reasoning…');
+  const agentRows = ref<AgentRow[]>([]);
+  const streaming = ref<ChatMessage | null>(null);
+  let streamCounter = 1000;
 
   async function loadConversation(id: string, ids: string[]) {
     conversationId.value = id;
     loading.value = true;
     try {
+      if (BACKEND_MODE) {
+        // The backend owns thread state: start blank, stream events fill in.
+        messageIds.value = [];
+        requirements.value = service.emptyRequirements();
+        research.value = service.emptyResearch();
+        agentRows.value = [];
+        streaming.value = null;
+        streamStatus.value = '';
+        return;
+      }
       const msgs = await service.getMessages(ids);
       for (const m of msgs) cache.value[m.id] = m;
       messageIds.value = ids;
@@ -50,13 +73,90 @@ export const useTravelStore = defineStore('travel', () => {
     cache.value[pending.id] = pending;
     messageIds.value.push(pending.id);
     loading.value = true;
+    // Streaming path: the pending message becomes the final user message.
+    // Classic path: the backend echoes the user message via append(res).
+    let keepPending = false;
     try {
-      const res = await service.sendMessage(conversationId.value, text);
-      append(res);
+      if (BACKEND_MODE) {
+        streamStatus.value = 'Reasoning…';
+        agentRows.value = [];
+        streaming.value = null;
+        for await (const ev of service.streamMessage(conversationId.value, text)) applyEvent(ev);
+        streaming.value = null;
+        keepPending = true;
+      } else {
+        const res = await service.sendMessage(conversationId.value, text);
+        messageIds.value = messageIds.value.filter((id) => id !== pending.id);
+        delete cache.value[pending.id];
+        append(res);
+      }
     } finally {
-      messageIds.value = messageIds.value.filter((id) => id !== pending.id);
-      delete cache.value[pending.id];
+      if (!keepPending) {
+        messageIds.value = messageIds.value.filter((id) => id !== pending.id);
+        delete cache.value[pending.id];
+      }
       loading.value = false;
+    }
+  }
+
+  function applyEvent(ev: StreamEvent) {
+    switch (ev.type) {
+      case 'status':
+        streamStatus.value = ev.text;
+        break;
+      case 'agents.start':
+        for (const id of ev.agents) {
+          const key = AGENT_RESEARCH_KEY[id];
+          if (key) research.value[key] = 'active';
+          const row = agentRows.value.find((r) => r.id === id);
+          if (row) row.state = 'active';
+          else agentRows.value.push({ id, label: AGENT_LABELS[id] ?? id, state: 'active' });
+        }
+        break;
+      case 'agent.done': {
+        const row = agentRows.value.find((r) => r.id === ev.id);
+        if (row) row.state = 'done';
+        const key = AGENT_RESEARCH_KEY[ev.id];
+        if (key) research.value[key] = 'done';
+        break;
+      }
+      case 'research.update':
+        research.value[ev.key] = ev.state;
+        break;
+      case 'requirements.updated':
+        requirements.value = ev.requirements;
+        break;
+      case 'token':
+        if (!streaming.value) {
+          streaming.value = {
+            id: `s${++streamCounter}`,
+            role: 'assistant',
+            kind: 'text',
+            text: '',
+            createdAt: 'now'
+          };
+        }
+        streaming.value = { ...streaming.value, text: (streaming.value.text ?? '') + ev.text };
+        break;
+      case 'message':
+        if (streaming.value) {
+          cache.value[streaming.value.id] = streaming.value;
+          messageIds.value.push(streaming.value.id);
+          streaming.value = null;
+        }
+        cache.value[ev.message.id] = ev.message;
+        messageIds.value.push(ev.message.id);
+        break;
+      case 'done':
+        if (streaming.value) {
+          cache.value[streaming.value.id] = streaming.value;
+          messageIds.value.push(streaming.value.id);
+          streaming.value = null;
+        }
+        break;
+      case 'error':
+        streaming.value = null;
+        throw new Error(ev.message);
     }
   }
 
@@ -70,7 +170,7 @@ export const useTravelStore = defineStore('travel', () => {
     }
   }
 
-  return { messages, loading, requirements, research, budget, loadConversation, send, choose };
+  return { messages, loading, streamStatus, agentRows, streaming, requirements, research, budget, loadConversation, send, choose };
 });
 
 export const useLibraryStore = defineStore('library', () => {

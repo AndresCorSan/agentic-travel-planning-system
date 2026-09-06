@@ -3,12 +3,26 @@
 <script setup lang="ts">
 import Button from 'primevue/button';
 import Textarea from 'primevue/textarea';
-import { ref } from 'vue';
+import { nextTick, ref, watch } from 'vue';
 
 const props = defineProps<{ loading: boolean }>();
 const emit = defineEmits<{ send: [text: string] }>();
 
+// PrimeVue auto-resize grows but doesn't reliably shrink back:
+// size the textarea manually from its content, capped at MAX_HEIGHT.
+const MAX_HEIGHT = 160;
+const area = ref<{ $el: HTMLTextAreaElement } | null>(null);
 const draft = ref('');
+
+async function fit() {
+  await nextTick();
+  const el = area.value?.$el;
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT)}px`;
+  el.style.overflowY = el.scrollHeight > MAX_HEIGHT ? 'auto' : 'hidden';
+}
+watch(draft, fit);
 
 function submit() {
   const t = draft.value.trim();
@@ -22,11 +36,10 @@ function submit() {
   <div class="float-wrap">
     <div class="float-composer">
       <Textarea
+        ref="area"
         v-model="draft"
         rows="1"
-        auto-resize
         placeholder="How can I help you plan your trip?"
-        :disabled="loading"
         class="input"
         @keydown.enter.exact.prevent="submit()"
       />
@@ -73,6 +86,7 @@ function submit() {
 .input {
   flex: 1;
   resize: none;
+  max-height: 160px;
 }
 .float-composer :deep(.p-textarea) {
   background: transparent;

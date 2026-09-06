@@ -1,4 +1,6 @@
 import { api } from './client';
+import { postStream } from './stream';
+import type { StreamEvent } from '../types';
 import {
   conversations,
   destinations,
@@ -27,6 +29,12 @@ const delay = (ms = 700) => new Promise((r) => setTimeout(r, ms));
 
 let msgCounter = 100;
 const extraMessages: Record<string, ChatMessage> = {};
+
+/** Live event stream for POST /conversations/{id}/messages (Fase B). */
+export function streamMessage(conversationId: string, text: string): AsyncGenerator<StreamEvent> {
+  const base = api.defaults.baseURL ?? '';
+  return postStream(`${base}/conversations/${conversationId}/messages`, { message: text });
+}
 
 /** Local-only placeholder shown instantly while the reply is being generated. */
 export function createPendingUser(text: string): ChatMessage {
@@ -194,7 +202,37 @@ export function baseRequirements(destination: string | null): RequirementItem[] 
 }
 
 export function fullResearch(): ResearchStatus {
-  return { weather: true, transportation: true, accommodation: true, activities: true, rentalCar: true };
+  return { weather: 'done', transportation: 'done', accommodation: 'done', activities: 'done', rentalCar: 'done' };
+}
+
+/** Blank state for backend mode: nothing known until stream events arrive. */
+export function emptyRequirements(): RequirementItem[] {
+  return [
+    { key: 'destination', label: 'Destination', value: null, confirmed: false },
+    { key: 'origin', label: 'Origin', value: null, confirmed: false },
+    { key: 'dates', label: 'Dates', value: null, confirmed: false },
+    { key: 'duration', label: 'Duration', value: null, confirmed: false },
+    { key: 'travelers', label: 'Travelers', value: null, confirmed: false },
+    { key: 'budget', label: 'Budget', value: null, confirmed: false },
+    { key: 'interests', label: 'Interests', value: null, confirmed: false },
+    { key: 'transport', label: 'Transport', value: null, confirmed: false },
+    { key: 'accommodation', label: 'Accommodation', value: null, confirmed: false },
+    { key: 'constraints', label: 'Constraints', value: null, confirmed: false }
+  ];
+}
+
+export function emptyResearch(): ResearchStatus {
+  return {
+    weather: 'pending',
+    transportation: 'pending',
+    accommodation: 'pending',
+    activities: 'pending',
+    rentalCar: 'pending'
+  };
+}
+
+export function emptyBudget(): BudgetSummary {
+  return { estimated: 0, budget: null, currency: '€' };
 }
 
 export function lisbonBudget(): BudgetSummary {
