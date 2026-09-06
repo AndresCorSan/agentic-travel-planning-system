@@ -46,11 +46,16 @@ export const useTravelStore = defineStore('travel', () => {
   }
 
   async function send(text: string) {
+    const pending = service.createPendingUser(text);
+    cache.value[pending.id] = pending;
+    messageIds.value.push(pending.id);
     loading.value = true;
     try {
       const res = await service.sendMessage(conversationId.value, text);
       append(res);
     } finally {
+      messageIds.value = messageIds.value.filter((id) => id !== pending.id);
+      delete cache.value[pending.id];
       loading.value = false;
     }
   }

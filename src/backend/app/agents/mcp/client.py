@@ -1,4 +1,8 @@
+import logging
+
 from langchain_mcp_adapters.client import MultiServerMCPClient
+
+logger = logging.getLogger("uvicorn.error")
 
 MCP_SERVERS = {
     "ticketlens": {
@@ -30,29 +34,37 @@ def create_mcp_client() -> MultiServerMCPClient:
     return MultiServerMCPClient(MCP_SERVERS)
 
 
-async def load_mcp_tools(client: MultiServerMCPClient) -> dict:
-    """Fetch all tools and split them per agent. Returns dict with
-    weather_tools, ticketlens_tools, trvl_tool, rental_cars_tool."""
-    tools = await client.get_tools()
+async def load_mcp_tools() -> dict:
+    """Fetch tools per server, tolerating individual server failures.
 
+    Returns dict with weather_tools, ticketlens_tools, trvl_tool,
+    rental_cars_tool. Entries for unreachable servers come back empty
+    (lists) or None (single tools); the graph is built with whatever
+    is available instead of failing the whole backend.
+    """
     weather_tools = []
     ticketlens_tools = []
     trvl_tool = None
     rental_cars_tool = None
 
-    for t in tools:
-        if t.name.startswith("openmeteo"):
-            weather_tools.append(t)
-        elif t.name in TICKETLENS_TOOL_NAMES:
-            ticketlens_tools.append(t)
-        elif t.name == "travel":
-            trvl_tool = t
-        elif t.name == "search":
-            # Renamed to avoid conflicts with other MCPs
-            t.name = "search_rental_cars"
-            rental_cars_tool = t
-        else:
+    for server_name, params in MCP_SERVERS.items():
+        try:
+            server_tools = await MultiServerMCPClient({server_name: params}).get_tools()
+            logger.info("MCP server %s: %d tools loaded", server_name, len(server_tools))
+        except Exception:
+            logger.warning("Skipping MCP server %s: load failed", server_name, exc_info=True)
             continue
+        for t in server_tools:
+            if t.name.startswith("openmeteo"):
+                weather_tools.append(t)
+            elif t.name in TICKETLENS_TOOL_NAMES:
+                ticketlens_tools.append(t)
+            elif t.name == "travel":
+                trvl_tool = t
+            elif t.name == "search":
+                # Renamed to avoid conflicts with other MCPs
+                t.name = "search_rental_cars"
+                rental_cars_tool = t
 
     return {
         "weather_tools": weather_tools,

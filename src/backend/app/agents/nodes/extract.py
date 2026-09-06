@@ -11,6 +11,11 @@ Do not infer preferences, constraints, destinations, dates, budgets, or other va
 
 Preserve the user's meaning when normalizing values such as dates and currency.
 Leave unknown fields empty.
+Use JSON null for unknown fields — never the string "None".
+
+Never write a conversational reply or any text outside the schema.
+Your only output is the structured requirements object — always return it,
+even if all fields are empty.
 """
 
 requirements_llm = low_reasoning_llm.with_structured_output(

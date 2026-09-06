@@ -1,3 +1,4 @@
+import { api } from './client';
 import {
   conversations,
   destinations,
@@ -27,6 +28,17 @@ const delay = (ms = 700) => new Promise((r) => setTimeout(r, ms));
 let msgCounter = 100;
 const extraMessages: Record<string, ChatMessage> = {};
 
+/** Local-only placeholder shown instantly while the reply is being generated. */
+export function createPendingUser(text: string): ChatMessage {
+  return {
+    id: `p${++msgCounter}`,
+    role: 'user',
+    kind: 'text',
+    text,
+    createdAt: 'now'
+  };
+}
+
 export async function listConversations(): Promise<Conversation[]> {
   return [...conversations];
 }
@@ -46,6 +58,26 @@ export interface MockSendResult {
 }
 
 export async function sendMessage(conversationId: string, text: string): Promise<MockSendResult> {
+  if (import.meta.env.VITE_USE_BACKEND === 'true') {
+    const user: ChatMessage = {
+      id: `u${++msgCounter}`,
+      role: 'user',
+      kind: 'text',
+      text,
+      createdAt: 'now'
+    };
+    const { data } = await api.post(`/conversations/${conversationId}/messages`, { message: text }, { timeout: 300000 });
+    const replies: ChatMessage[] = data.replies.map((r: { text: string }) => ({
+      id: `a${++msgCounter}`,
+      role: 'assistant',
+      kind: 'text',
+      text: r.text,
+      createdAt: 'now'
+    }));
+    for (const m of [user, ...replies]) extraMessages[m.id] = m;
+    void conversationId;
+    return { user, replies };
+  }
   await delay();
   const user: ChatMessage = {
     id: `u${++msgCounter}`,

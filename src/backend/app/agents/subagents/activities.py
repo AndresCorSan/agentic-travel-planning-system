@@ -1,8 +1,9 @@
 from langchain_core.messages import SystemMessage
 from langgraph.prebuilt import ToolNode
 from app.agents.llm import subagent_llm
-from app.agents.mcp.client import ticketlens_tools
 from app.agents.subagents._base import SubagentState, build_subagent_graph
+from app.agents.utils import sanitize_messages_for_llm
+
 from app.agents.utils import sanitize_messages_for_llm
 
 ACTIVITIES_AGENT_PROMPT = """
@@ -30,30 +31,35 @@ Output:
 - End with a brief "Key findings" section for the main travel planner.
 """
 
-activities_llm = subagent_llm.bind_tools(ticketlens_tools)
 
-async def activities_agent(state: SubagentState):
-    task = state["task"]
+def build_activities_subgraph(ticketlens_tools):
+    bound_llm = subagent_llm.bind_tools(ticketlens_tools)
 
-    response = await activities_llm.ainvoke([
-        SystemMessage(content=ACTIVITIES_AGENT_PROMPT),
-        SystemMessage(content=f"Assigned task:\n{task}"),
-        *sanitize_messages_for_llm(state["messages"]),
-    ])
+    async def activities_agent(state: SubagentState):
+        task = state["task"]
 
-    return {"messages": [response]}
+        response = await bound_llm.ainvoke([
+            SystemMessage(content=ACTIVITIES_AGENT_PROMPT),
+            SystemMessage(content=f"Assigned task:\n{task}"),
+            *sanitize_messages_for_llm(state["messages"]),
+        ])
 
-activities_graph = build_subagent_graph(
-    activities_agent,
-    ToolNode(ticketlens_tools)
-)
-async def run_activities_agent(state: SubagentState):
-    result = await activities_graph.ainvoke({
-        "task": state["task"],
-        "messages": [],
-        "result": None,
-    })
+        return {"messages": [response]}
 
-    return {
-        "activity_results": [result["result"]]
-    }
+    subgraph = build_subagent_graph(
+        activities_agent,
+        ToolNode(ticketlens_tools)
+    )
+
+    async def run_activities_agent(state: SubagentState):
+        result = await subgraph.ainvoke({
+            "task": state["task"],
+            "messages": [],
+            "result": None,
+        })
+
+        return {
+            "activity_results": [result["result"]]
+        }
+
+    return run_activities_agent

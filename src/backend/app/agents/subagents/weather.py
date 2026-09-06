@@ -1,8 +1,9 @@
 from langchain_core.messages import SystemMessage
 from langgraph.prebuilt import ToolNode
 from app.agents.llm import subagent_llm
-from app.agents.mcp.client import weather_tools
-from backend.app.agents.subagents._base import SubagentState, build_subagent_graph
+from app.agents.subagents._base import SubagentState, build_subagent_graph
+from app.agents.utils import sanitize_messages_for_llm
+
 from app.agents.utils import sanitize_messages_for_llm
 
 WEATHER_AGENT_PROMPT = """
@@ -39,31 +40,35 @@ Output:
 - End with a brief "Key findings" section for the main travel planner.
 """
 
-weather_llm = subagent_llm.bind_tools(weather_tools)
 
-async def weather_agent(state: SubagentState):
-    task = state["task"]
+def build_weather_subgraph(weather_tools):
+    bound_llm = subagent_llm.bind_tools(weather_tools)
 
-    response = await weather_llm.ainvoke([
-        SystemMessage(content=WEATHER_AGENT_PROMPT),
-        SystemMessage(content=f"Assigned task:\n{task}"),
-        *sanitize_messages_for_llm(state["messages"]),
-    ])
+    async def weather_agent(state: SubagentState):
+        task = state["task"]
 
-    return {"messages": [response]}
+        response = await bound_llm.ainvoke([
+            SystemMessage(content=WEATHER_AGENT_PROMPT),
+            SystemMessage(content=f"Assigned task:\n{task}"),
+            *sanitize_messages_for_llm(state["messages"]),
+        ])
 
-weather_graph = build_subagent_graph(
-    weather_agent, 
-    ToolNode(weather_tools)
-)
-async def run_weather_agent(state: SubagentState):
-    # Wrapper used to map the subagent's private state/output to the main TravelState.
-    result = await weather_graph.ainvoke({
-        "task": state["task"],
-        "messages": [],
-        "result": None,
-    })
+        return {"messages": [response]}
 
-    return {
-        "weather_results": [result["result"]]
-    }
+    subgraph = build_subagent_graph(
+        weather_agent,
+        ToolNode(weather_tools)
+    )
+
+    async def run_weather_agent(state: SubagentState):
+        result = await subgraph.ainvoke({
+            "task": state["task"],
+            "messages": [],
+            "result": None,
+        })
+
+        return {
+            "weather_results": [result["result"]]
+        }
+
+    return run_weather_agent

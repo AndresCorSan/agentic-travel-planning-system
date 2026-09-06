@@ -1,8 +1,9 @@
 from langchain_core.messages import SystemMessage
 from langgraph.prebuilt import ToolNode
 from app.agents.llm import subagent_llm
-from app.agents.mcp.client import rental_cars_tool
 from app.agents.subagents._base import SubagentState, build_subagent_graph
+from app.agents.utils import sanitize_messages_for_llm
+
 from app.agents.utils import sanitize_messages_for_llm
 
 RENTAL_CARS_AGENT_PROMPT = """
@@ -32,30 +33,36 @@ Output:
 
 Do not research flights, accommodations, weather, or activities.
 """
-rental_cars_llm = subagent_llm.bind_tools([rental_cars_tool])
 
-async def rental_cars_agent(state: SubagentState):
-    task = state["task"]
 
-    response = await rental_cars_llm.ainvoke([
-        SystemMessage(content=RENTAL_CARS_AGENT_PROMPT),
-        SystemMessage(content=f"Assigned task:\n{task}"),
-        *sanitize_messages_for_llm(state["messages"]),
-    ])
+def build_rental_cars_subgraph(rental_cars_tool):
+    bound_llm = subagent_llm.bind_tools([rental_cars_tool])
 
-    return {"messages": [response]}
+    async def rental_cars_agent(state: SubagentState):
+        task = state["task"]
 
-rental_cars_graph = build_subagent_graph(
-    rental_cars_agent,
-    ToolNode([rental_cars_tool])
-)
-async def run_rental_cars_agent(state: SubagentState):
-    result = await rental_cars_graph.ainvoke({
-        "task": state["task"],
-        "messages": [],
-        "result": None,
-    })
+        response = await bound_llm.ainvoke([
+            SystemMessage(content=RENTAL_CARS_AGENT_PROMPT),
+            SystemMessage(content=f"Assigned task:\n{task}"),
+            *sanitize_messages_for_llm(state["messages"]),
+        ])
 
-    return {
-        "rental_car_results": [result["result"]]
-    }
+        return {"messages": [response]}
+
+    subgraph = build_subagent_graph(
+        rental_cars_agent,
+        ToolNode([rental_cars_tool])
+    )
+
+    async def run_rental_cars_agent(state: SubagentState):
+        result = await subgraph.ainvoke({
+            "task": state["task"],
+            "messages": [],
+            "result": None,
+        })
+
+        return {
+            "rental_car_results": [result["result"]]
+        }
+
+    return run_rental_cars_agent

@@ -51,9 +51,21 @@ def update_requirements(
     remove_constraints: list[str] | str | None = None,
 ) -> Command:
     """
-    Update the user's current travel requirements.
+    Save the travel requirements from the user's message.
 
-    Only provide fields that have been explicitly added or changed by the user.
+    WHEN TO CALL: when the message adds, changes, or removes travel
+    information — stated directly or clearly implied ("my partner" means
+    2 travelers, "a week" means 7 days...).
+
+    WHEN NOT TO CALL — do not call this tool at all for:
+    - greetings, goodbyes, thanks, small talk ("hi", "hello", "thanks")
+    - questions with no travel content
+
+    HOW TO FILL EACH FIELD: normalize the user's wording freely (months
+    into dates, "a week" into 7 days...), but never invent entities the user
+    did not mention: no new cities or destinations, no budget figures,
+    no constraints they did not state. When in doubt about a field,
+    leave it unset — partial updates are correct.
 
     For interests and constraints:
     - Use add_interests to add new interests.
@@ -61,8 +73,7 @@ def update_requirements(
     - Use add_constraints to add new constraints.
     - Use remove_constraints to remove previous constraints.
 
-    Do not invent requirements or modify information that the user has not
-    explicitly changed.
+    Do not modify information that the user has not changed.
     """
 
     # ToolRuntime gives the tool access to the current LangGraph state,

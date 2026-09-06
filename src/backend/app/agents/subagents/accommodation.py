@@ -1,8 +1,7 @@
 from langchain_core.messages import SystemMessage
 from langgraph.prebuilt import ToolNode
 from app.agents.llm import subagent_llm
-from app.agents.mcp.client import trvl_tool
-from backend.app.agents.subagents._base import SubagentState, build_subagent_graph
+from app.agents.subagents._base import SubagentState, build_subagent_graph
 from app.agents.utils import sanitize_messages_for_llm
 
 ACCOMMODATION_AGENT_PROMPT = """
@@ -37,30 +36,35 @@ Output:
 Do not research flights, ground transport, weather, activities, or rental cars.
 """
 
-accommodation_llm = subagent_llm.bind_tools([trvl_tool])
 
-async def accommodation_agent(state: SubagentState):
-    task = state["task"]
+def build_accommodation_subgraph(trvl_tool):
+    bound_llm = subagent_llm.bind_tools([trvl_tool])
 
-    response = await accommodation_llm.ainvoke([
-        SystemMessage(content=ACCOMMODATION_AGENT_PROMPT),
-        SystemMessage(content=f"Assigned task:\n{task}"),
-        *sanitize_messages_for_llm(state["messages"]),
-    ])
+    async def accommodation_agent(state: SubagentState):
+        task = state["task"]
 
-    return {"messages": [response]}
+        response = await bound_llm.ainvoke([
+            SystemMessage(content=ACCOMMODATION_AGENT_PROMPT),
+            SystemMessage(content=f"Assigned task:\n{task}"),
+            *sanitize_messages_for_llm(state["messages"]),
+        ])
 
-accommodation_graph = build_subagent_graph(
-    accommodation_agent,
-    ToolNode([trvl_tool])
-)
-async def run_accommodation_agent(state: SubagentState):
-    result = await accommodation_graph.ainvoke({
-        "task": state["task"],
-        "messages": [],
-        "result": None,
-    })
+        return {"messages": [response]}
 
-    return {
-        "accommodation_results": [result["result"]]
-    }
+    subgraph = build_subagent_graph(
+        accommodation_agent,
+        ToolNode([trvl_tool])
+    )
+
+    async def run_accommodation_agent(state: SubagentState):
+        result = await subgraph.ainvoke({
+            "task": state["task"],
+            "messages": [],
+            "result": None,
+        })
+
+        return {
+            "accommodation_results": [result["result"]]
+        }
+
+    return run_accommodation_agent

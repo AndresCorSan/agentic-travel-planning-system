@@ -2,7 +2,7 @@ from operator import add
 from typing import Annotated, Literal
 from typing_extensions import TypedDict
 from langgraph.graph.message import add_messages
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # Define the shared TravelState
 class TravelRequirements(BaseModel):
@@ -15,6 +15,24 @@ class TravelRequirements(BaseModel):
     currency: str | None = None
     interests: list[str] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)
+
+    @field_validator("origin", "destination", "travel_dates", "currency", mode="before")
+    @classmethod
+    def _blank_str_to_none(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str) and v.strip().lower() in ("", "none", "null", "n/a"):
+            return None
+        return v
+
+    @field_validator("duration_days", "travelers", "budget", mode="before")
+    @classmethod
+    def _blank_num_to_none(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str) and v.strip().lower() in ("", "none", "null", "n/a"):
+            return None
+        return v
 
 class DestinationCandidate(BaseModel):
     destination: str
@@ -38,7 +56,7 @@ class TravelState(TypedDict):
     messages: Annotated[list, add_messages]
     requirements: TravelRequirements | None
     
-    destination_research_needed: bool 
+    next_step: Literal["destination_research", "orchestrator", "main_llm"] | None
     destination_candidates: list[DestinationCandidate]
 
     # Results from each sub-agent

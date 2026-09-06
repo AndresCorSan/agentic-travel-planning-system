@@ -1,8 +1,9 @@
 from langchain_core.messages import SystemMessage
 from langgraph.prebuilt import ToolNode
 from app.agents.llm import subagent_llm
-from app.agents.mcp.client import trvl_tool
-from backend.app.agents.subagents._base import SubagentState, build_subagent_graph
+from app.agents.subagents._base import SubagentState, build_subagent_graph
+from app.agents.utils import sanitize_messages_for_llm
+
 from app.agents.utils import sanitize_messages_for_llm
 
 TRANSPORTATION_AGENT_PROMPT = """
@@ -42,30 +43,35 @@ Output:
 Do not research accommodations, weather, activities, or rental cars.
 """
 
-transportation_llm = subagent_llm.bind_tools([trvl_tool])
 
-async def transportation_agent(state: SubagentState):
-    task = state["task"]
+def build_transportation_subgraph(trvl_tool):
+    bound_llm = subagent_llm.bind_tools([trvl_tool])
 
-    response = await transportation_llm.ainvoke([
-        SystemMessage(content=TRANSPORTATION_AGENT_PROMPT),
-        SystemMessage(content=f"Assigned task:\n{task}"),
-        *sanitize_messages_for_llm(state["messages"]),
-    ])
+    async def transportation_agent(state: SubagentState):
+        task = state["task"]
 
-    return {"messages": [response]}
+        response = await bound_llm.ainvoke([
+            SystemMessage(content=TRANSPORTATION_AGENT_PROMPT),
+            SystemMessage(content=f"Assigned task:\n{task}"),
+            *sanitize_messages_for_llm(state["messages"]),
+        ])
 
-transportation_graph = build_subagent_graph(
-    transportation_agent,
-    ToolNode([trvl_tool])
-)
-async def run_transportation_agent(state: SubagentState):
-    result = await transportation_graph.ainvoke({
-        "task": state["task"],
-        "messages": [],
-        "result": None,
-    })
+        return {"messages": [response]}
 
-    return {
-        "transportation_results": [result["result"]]
-    }
+    subgraph = build_subagent_graph(
+        transportation_agent,
+        ToolNode([trvl_tool])
+    )
+
+    async def run_transportation_agent(state: SubagentState):
+        result = await subgraph.ainvoke({
+            "task": state["task"],
+            "messages": [],
+            "result": None,
+        })
+
+        return {
+            "transportation_results": [result["result"]]
+        }
+
+    return run_transportation_agent
