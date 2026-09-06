@@ -1,3 +1,4 @@
+import functools
 import logging
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -34,6 +35,41 @@ def create_mcp_client() -> MultiServerMCPClient:
     return MultiServerMCPClient(MCP_SERVERS)
 
 
+def _guard_tool(tool):
+    """Wrap an MCP tool so service failures come back as text, not exceptions.
+
+    Without this, a transport failure (e.g. 429/500 from the MCP server)
+    raises through ToolNode, kills the whole graph, and aborts the SSE
+    stream. As plain text, the subagent LLM sees the failure and reports
+    the limitation gracefully instead of crashing the flow.
+    """
+    run = tool.coroutine
+    if run is None:
+        return tool
+
+    @functools.wraps(run)
+    async def _safe_run(*args, **kwargs):
+        try:
+            return await run(*args, **kwargs)
+        except Exception as e:
+            logger.warning("MCP tool %s failed: %s", tool.name, e)
+            error_text = (
+                f"TOOL ERROR: '{tool.name}' failed "
+                f"({type(e).__name__}: {e}). "
+                "This data is unavailable right now. Do NOT retry the "
+                "identical call more than once; report in your result which "
+                "information is missing and why, without inventing it."
+            )
+            # MCP tools use response_format="content_and_artifact": the
+            # coroutine must return a (content, artifact) tuple, not a str.
+            if getattr(tool, "response_format", None) == "content_and_artifact":
+                return error_text, None
+            return error_text
+
+    tool.coroutine = _safe_run
+    return tool
+
+
 async def load_mcp_tools() -> dict:
     """Fetch tools per server, tolerating individual server failures.
 
@@ -55,6 +91,7 @@ async def load_mcp_tools() -> dict:
             logger.warning("Skipping MCP server %s: load failed", server_name, exc_info=True)
             continue
         for t in server_tools:
+            t = _guard_tool(t)
             if t.name.startswith("openmeteo"):
                 weather_tools.append(t)
             elif t.name in TICKETLENS_TOOL_NAMES:

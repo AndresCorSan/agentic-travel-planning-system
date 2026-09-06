@@ -45,6 +45,8 @@ def update_requirements(
     travelers: int | None = None,
     budget: float | None = None,
     currency: str | None = None,
+    transport_mode: str | None = None,
+    accommodation_type: str | None = None,
     add_interests: list[str] | str | None = None,
     remove_interests: list[str] | str | None = None,
     add_constraints: list[str] | str | None = None,
@@ -62,7 +64,9 @@ def update_requirements(
     - questions with no travel content
 
     HOW TO FILL EACH FIELD: normalize the user's wording freely (months
-    into dates, "a week" into 7 days...), but never invent entities the user
+    into dates, "a week" into 7 days, "by train"/"flying"/"driving" into
+    transport_mode, "hotel"/"hostel"/"apartment" into accommodation_type...),
+    but never invent entities the user
     did not mention: no new cities or destinations, no budget figures,
     no constraints they did not state. When in doubt about a field,
     leave it unset — partial updates are correct.
@@ -112,6 +116,12 @@ def update_requirements(
 
     if currency is not None:
         updated.currency = currency
+
+    if transport_mode is not None:
+        updated.transport_mode = transport_mode
+
+    if accommodation_type is not None:
+        updated.accommodation_type = accommodation_type
 
     # Update interests
     if add_interests:

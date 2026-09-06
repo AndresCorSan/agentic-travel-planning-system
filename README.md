@@ -182,7 +182,7 @@ capability to the system.
 - [x] Build the conversational chat interface
 - [ ] Support multi-turn conversations and LangGraph interrupts/resume
 - [ ] Support thread-based conversations
-- [ ] Display current travel requirements and planning state
+- [x] Display current travel requirements and planning state
 - [ ] Display itinerary and budget information
 - [ ] Display validation, scoring, and research results
 
@@ -190,7 +190,7 @@ capability to the system.
 
 - [ ] Persist users, sessions, requirements, research, and itineraries in MariaDB
 - [ ] Add production-oriented LangGraph checkpointing
-- [ ] Expose the planning workflow through FastAPI
+- [x] Expose the planning workflow through FastAPI
 - [ ] Connect the web application to persistent backend data
 
 ### Phase 10 — Observability, Evaluation & Release

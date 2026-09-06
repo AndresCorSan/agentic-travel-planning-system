@@ -13,10 +13,20 @@ class TravelRequirements(BaseModel):
     travelers: int | None = None
     budget: float | None = None
     currency: str | None = None
+    transport_mode: str | None = None
+    accommodation_type: str | None = None
     interests: list[str] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)
 
-    @field_validator("origin", "destination", "travel_dates", "currency", mode="before")
+    @field_validator(
+        "origin",
+        "destination",
+        "travel_dates",
+        "currency",
+        "transport_mode",
+        "accommodation_type",
+        mode="before",
+    )
     @classmethod
     def _blank_str_to_none(cls, v):
         if v is None:

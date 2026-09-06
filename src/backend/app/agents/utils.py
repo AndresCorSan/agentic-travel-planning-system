@@ -1,4 +1,6 @@
-from langchain_core.messages import ToolMessage
+from datetime import date
+
+from langchain_core.messages import SystemMessage, ToolMessage
 
 def sanitize_messages_for_llm(messages):
     """
@@ -43,3 +45,15 @@ def sanitize_messages_for_llm(messages):
             sanitized.append(message)
 
     return sanitized
+
+
+def current_date_message() -> SystemMessage:
+    """SystemMessage stating today's date, built fresh on every invocation.
+
+    Static context belongs in the prompt, not behind a tool call: this costs
+    no round-trip and is always present for date-sensitive research.
+    """
+    today = date.today()
+    return SystemMessage(
+        content=f"Today is {today.strftime('%A, %B %d, %Y')} ({today.isoformat()})."
+    )

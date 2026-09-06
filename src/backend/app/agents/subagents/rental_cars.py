@@ -2,7 +2,7 @@ from langchain_core.messages import SystemMessage
 from langgraph.prebuilt import ToolNode
 from app.agents.llm import subagent_llm
 from app.agents.subagents._base import SubagentState, build_subagent_graph
-from app.agents.utils import sanitize_messages_for_llm
+from app.agents.utils import current_date_message, sanitize_messages_for_llm
 
 from app.agents.utils import sanitize_messages_for_llm
 
@@ -44,6 +44,7 @@ def build_rental_cars_subgraph(rental_cars_tool):
         response = await bound_llm.ainvoke([
             SystemMessage(content=RENTAL_CARS_AGENT_PROMPT),
             SystemMessage(content=f"Assigned task:\n{task}"),
+            current_date_message(),
             *sanitize_messages_for_llm(state["messages"]),
         ])
 

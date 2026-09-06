@@ -2,7 +2,7 @@ from langchain_core.messages import SystemMessage
 from app.agents.llm import llm
 from app.agents.state import TravelState
 from app.agents.tools.requirements import update_requirements
-from app.agents.utils import sanitize_messages_for_llm
+from app.agents.utils import current_date_message, sanitize_messages_for_llm
 
 MAIN_LLM_PROMPT = """
 You are a Travel Planner specialized in personalized trip planning.
@@ -16,12 +16,16 @@ Behavior:
 
 Destination research:
 - Treat previously presented destination candidates as suggestions, not as a decision.
-- If the user selects or specifies a destination, use update_requirements to save it
-  and continue planning for that destination.
+- If the user selects or specifies a destination that is not already saved,
+  use update_requirements to save it and continue planning for that destination.
 
 Requirements:
 - Treat current requirements as the trip's current state.
-- Call update_requirements when the user's message contains new or changed
+- Before calling update_requirements, compare the user's message against
+  Current travel requirements: if every travel detail mentioned is already
+  saved with the same value, nothing is new or changed — answer directly
+  in text and DO NOT call the tool.
+- Call update_requirements only when the user's message contains new or changed
   travel information, stated or clearly implied. If there is no travel
   content (greetings, thanks, small talk, generic questions), answer
   directly in text and DO NOT call the tool.
@@ -87,6 +91,7 @@ async def main_llm_node(state: TravelState) -> dict:
         SystemMessage(
             content=f"Current travel requirements:\n{state['requirements']}"
         ),
+        current_date_message(),
     ]
 
     # ...+ subagents' research results (if any) +...
