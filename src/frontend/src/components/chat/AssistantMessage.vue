@@ -7,6 +7,8 @@ import BudgetSummary from '../travel/BudgetSummary.vue';
 import ItineraryBlock from '../travel/ItineraryBlock.vue';
 import DestinationRecommendation from '../travel/DestinationRecommendation.vue';
 import TravelOptionCard from '../travel/TravelOptionCard.vue';
+import SubagentResults from './SubagentResults.vue';
+import MessageTime from './MessageTime.vue';
 import { renderRich } from './richtext';
 
 const props = defineProps<{ message: ChatMessage; chosenDestination: string | null }>();
@@ -19,6 +21,7 @@ const html = computed(() => (props.message.text ? renderRich(props.message.text)
   <div class="ai-row">
     <div class="avatar">AI</div>
     <div class="ai-body">
+      <SubagentResults v-if="message.subagentResults?.length" :results="message.subagentResults" />
       <div v-if="html" class="prose" v-html="html" />
       <DestinationRecommendation
         v-if="message.kind === 'destinations'"
@@ -28,7 +31,7 @@ const html = computed(() => (props.message.text ? renderRich(props.message.text)
       <TravelOptionCard v-else-if="message.kind === 'options'" />
       <BudgetSummary v-else-if="message.kind === 'budget'" />
       <ItineraryBlock v-else-if="message.kind === 'itinerary'" />
-      <span class="time">{{ message.createdAt }}</span>
+      <MessageTime :value="message.createdAt" />
     </div>
   </div>
 </template>

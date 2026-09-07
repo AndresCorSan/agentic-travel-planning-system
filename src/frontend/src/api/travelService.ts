@@ -43,7 +43,7 @@ export function createPendingUser(text: string): ChatMessage {
     role: 'user',
     kind: 'text',
     text,
-    createdAt: 'now'
+    createdAt: new Date().toISOString()
   };
 }
 
@@ -72,7 +72,7 @@ export async function sendMessage(conversationId: string, text: string): Promise
       role: 'user',
       kind: 'text',
       text,
-      createdAt: 'now'
+      createdAt: new Date().toISOString()
     };
     const { data } = await api.post(`/conversations/${conversationId}/messages`, { message: text }, { timeout: 300000 });
     const replies: ChatMessage[] = data.replies.map((r: { text: string }) => ({
@@ -80,7 +80,7 @@ export async function sendMessage(conversationId: string, text: string): Promise
       role: 'assistant',
       kind: 'text',
       text: r.text,
-      createdAt: 'now'
+      createdAt: new Date().toISOString()
     }));
     for (const m of [user, ...replies]) extraMessages[m.id] = m;
     void conversationId;
@@ -92,7 +92,7 @@ export async function sendMessage(conversationId: string, text: string): Promise
     role: 'user',
     kind: 'text',
     text,
-    createdAt: 'now'
+    createdAt: new Date().toISOString()
   };
   const lowered = text.toLowerCase();
   const replies: ChatMessage[] = [];
@@ -105,7 +105,7 @@ export async function sendMessage(conversationId: string, text: string): Promise
       role: 'assistant',
       kind: 'text',
       text: 'Lisbon locked in. I updated your requirements and refreshed research — see the Travel State panel. Anything you want to change: dates, hotel level, or rental-car days?',
-      createdAt: 'now'
+      createdAt: new Date().toISOString()
     });
   } else if (/budget|3000|price|cost/.test(lowered)) {
     replies.push({
@@ -114,7 +114,7 @@ export async function sendMessage(conversationId: string, text: string): Promise
       kind: 'budget',
       ref: 'lisbon-budget',
       text: 'Recomputed with your note — still comfortably inside budget:',
-      createdAt: 'now'
+      createdAt: new Date().toISOString()
     });
   } else if (/weather/.test(lowered)) {
     // Plain text for now; 'weather' MessageKind is reserved for a rich card.
@@ -123,7 +123,7 @@ export async function sendMessage(conversationId: string, text: string): Promise
       role: 'assistant',
       kind: 'text',
       text: weatherText,
-      createdAt: 'now'
+      createdAt: new Date().toISOString()
     });
   } else if (/plan|itinerary|day/.test(lowered)) {
     replies.push({
@@ -131,7 +131,7 @@ export async function sendMessage(conversationId: string, text: string): Promise
       role: 'assistant',
       kind: 'itinerary',
       ref: 'lisbon-plan',
-      createdAt: 'now'
+      createdAt: new Date().toISOString()
     });
   } else {
     replies.push({
@@ -139,7 +139,7 @@ export async function sendMessage(conversationId: string, text: string): Promise
       role: 'assistant',
       kind: 'text',
       text: 'Noted. I updated the draft requirements (mock). Tell me dates, budget shifts, or pick a destination and I will refresh research accordingly.',
-      createdAt: 'now'
+      createdAt: new Date().toISOString()
     });
   }
   for (const m of [user, ...replies]) extraMessages[m.id] = m;
@@ -157,7 +157,7 @@ export async function chooseDestination(destinationId: string): Promise<MockSend
     role: 'user',
     kind: 'text',
     text: `Let's go with ${name}.`,
-    createdAt: 'now'
+    createdAt: new Date().toISOString()
   };
   const replies: ChatMessage[] = [
     {
@@ -165,10 +165,10 @@ export async function chooseDestination(destinationId: string): Promise<MockSend
       role: 'assistant',
       kind: 'text',
       text: `${name} locked in. I pulled flights, hotel, transport, activities and rental options plus the September weather outlook:`,
-      createdAt: 'now'
+      createdAt: new Date().toISOString()
     },
-    { id: `a${++msgCounter}`, role: 'assistant', kind: 'options', ref: 'lisbon-options', createdAt: 'now' },
-    { id: `a${++msgCounter}`, role: 'assistant', kind: 'budget', ref: 'lisbon-budget', createdAt: 'now' }
+    { id: `a${++msgCounter}`, role: 'assistant', kind: 'options', ref: 'lisbon-options', createdAt: new Date().toISOString() },
+    { id: `a${++msgCounter}`, role: 'assistant', kind: 'budget', ref: 'lisbon-budget', createdAt: new Date().toISOString() }
   ];
   for (const m of [user, ...replies]) extraMessages[m.id] = m;
   return { user, replies, destinationChosen: name };

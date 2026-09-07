@@ -226,7 +226,10 @@ a:hover {
   font-size: 1rem;
 }
 .prose table {
+  display: block;
   width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
   border-collapse: collapse;
   margin: 8px 0 12px;
   font-size: 0.85rem;

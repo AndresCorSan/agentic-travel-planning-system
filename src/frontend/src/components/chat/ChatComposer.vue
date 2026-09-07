@@ -68,7 +68,10 @@ function submit() {
 .float-composer {
   display: flex;
   gap: 8px;
-  align-items: flex-end;
+  /* Center the row so single-line text sits optically centered; the
+     send button stays pinned to the bottom on its own when the
+     textarea grows to multiple lines. */
+  align-items: center;
   background: color-mix(in srgb, var(--p-surface-0) 88%, transparent);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -96,6 +99,11 @@ function submit() {
 .float-composer :deep(.p-textarea:enabled:focus) {
   border: 0;
   box-shadow: none;
+}
+/* Keep the button bottom-anchored when the textarea grows multiline. */
+.send-btn {
+  align-self: flex-end;
+  flex-shrink: 0;
 }
 /* pi-send glyph carries asymmetric bearings: nudge down-left to center. */
 .send-btn :deep(.pi-send) {

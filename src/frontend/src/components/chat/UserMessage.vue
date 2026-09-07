@@ -1,5 +1,7 @@
 <!-- Right-aligned user bubble row rendered inside MessageList. -->
 <script setup lang="ts">
+import MessageTime from './MessageTime.vue';
+
 defineProps<{ text: string; time: string }>();
 </script>
 
@@ -7,7 +9,7 @@ defineProps<{ text: string; time: string }>();
   <div class="user-row">
     <div class="user-bubble">
       <p>{{ text }}</p>
-      <span class="time">{{ time }}</span>
+      <MessageTime :value="time" />
     </div>
   </div>
 </template>

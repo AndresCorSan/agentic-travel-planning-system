@@ -1,5 +1,6 @@
 import json
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -40,6 +41,31 @@ def _task_agent(task) -> str | None:
         return task.agent
     if isinstance(task, dict):
         return task.get("agent")
+    return None
+
+
+AGENT_RESULT_MAX_CHARS = 8000
+
+def _subagent_result_text(output: dict) -> str | None:
+    """Latest text from a subagent node update.
+
+    Result keys are irregular (weather_results, activity_results,
+    rental_car_results, ...), so scan for the `*_results` suffix instead
+    of hardcoding them. Also tolerates Anthropic-style content blocks.
+    """
+    for key, value in output.items():
+        if key.endswith("_results") and isinstance(value, list) and value:
+            last = value[-1]
+            if isinstance(last, list):
+                last = "\n".join(
+                    b.get("text", "") for b in last
+                    if isinstance(b, dict) and b.get("type") == "text"
+                )
+            if isinstance(last, str) and last.strip():
+                text = last.strip()
+                if len(text) > AGENT_RESULT_MAX_CHARS:
+                    return text[:AGENT_RESULT_MAX_CHARS] + "\n\n…(truncated)"
+                return text
     return None
 
 
@@ -171,6 +197,9 @@ async def _stream(graph, conversation_id: str, message: str):
                             "research.update",
                             {"key": RESEARCH_KEY_BY_AGENT[node], "state": "done"},
                         )
+                        result_text = _subagent_result_text(output)
+                        if result_text:
+                            yield _frame("agent.result", {"id": node, "text": result_text})
         final = await graph.aget_state(config)
         req = (final.values or {}).get("requirements")
         if req is not None:
@@ -185,7 +214,7 @@ async def _stream(graph, conversation_id: str, message: str):
                             "role": "assistant",
                             "kind": "text",
                             "text": interrupt.value,
-                            "createdAt": "now",
+                            "createdAt": datetime.now(timezone.utc).isoformat(),
                         }
                     },
                 )

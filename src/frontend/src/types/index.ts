@@ -15,11 +15,21 @@ export interface ChatMessage {
   kind: MessageKind;
   /** Plain text body (assistant text uses lightweight markdown-ish rendering). */
   text?: string;
+  /** Outputs of the specialist subagents for this turn (backend streams
+      them via `agent.result`); rendered as accordions above the text. */
+  subagentResults?: SubagentResult[];
   /** Payload id for rich kinds (destination list, option list, …). Unread by
       current renderers, which fetch mock payloads directly; kept for the
       backend contract, which will serve payloads by id. */
   ref?: string;
   createdAt: string;
+}
+
+/** One specialist subagent output attached to an assistant message. */
+export interface SubagentResult {
+  id: string;
+  label: string;
+  text: string;
 }
 
 export interface Conversation {
@@ -60,6 +70,7 @@ export type StreamEvent =
   | { type: 'status'; text: string }
   | { type: 'agents.start'; agents: string[] }
   | { type: 'agent.done'; id: string }
+  | { type: 'agent.result'; id: string; text: string }
   | { type: 'research.update'; key: ResearchKey; state: ResearchState }
   | { type: 'requirements.updated'; requirements: RequirementItem[] }
   | { type: 'token'; text: string }

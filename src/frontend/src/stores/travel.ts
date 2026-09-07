@@ -5,7 +5,7 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import * as service from '../api/travelService';
 import { AGENT_LABELS, AGENT_RESEARCH_KEY } from '../api/stream';
-import type { AgentRow, BudgetSummary, ChatMessage, Conversation, ResearchStatus, RequirementItem, SavedPlan, StreamEvent } from '../types';
+import type { SubagentResult, AgentRow, BudgetSummary, ChatMessage, Conversation, ResearchStatus, RequirementItem, SavedPlan, StreamEvent } from '../types';
 
 export const useTravelStore = defineStore('travel', () => {
   const BACKEND_MODE = import.meta.env.VITE_USE_BACKEND === 'true';
@@ -29,6 +29,9 @@ export const useTravelStore = defineStore('travel', () => {
   const streamStatus = ref('Reasoning…');
   const agentRows = ref<AgentRow[]>([]);
   const streaming = ref<ChatMessage | null>(null);
+  // Specialist outputs buffered during the current turn (`agent.result`
+  // events); attached to the assistant message when it is finalized.
+  let pendingResults: SubagentResult[] = [];
   let streamCounter = 1000;
 
   async function loadConversation(id: string, ids: string[]) {
@@ -81,6 +84,7 @@ export const useTravelStore = defineStore('travel', () => {
         streamStatus.value = 'Reasoning…';
         agentRows.value = [];
         streaming.value = null;
+        pendingResults = [];
         for await (const ev of service.streamMessage(conversationId.value, text)) applyEvent(ev);
         streaming.value = null;
         keepPending = true;
@@ -120,6 +124,16 @@ export const useTravelStore = defineStore('travel', () => {
         if (key) research.value[key] = 'done';
         break;
       }
+      case 'agent.result': {
+        if (!pendingResults.some((r) => r.id === ev.id)) {
+          pendingResults.push({ id: ev.id, label: AGENT_LABELS[ev.id] ?? ev.id, text: ev.text });
+        }
+        // Show the accordion live under the streaming bubble as well.
+        if (streaming.value) {
+          streaming.value = { ...streaming.value, subagentResults: [...pendingResults] };
+        }
+        break;
+      }
       case 'research.update':
         research.value[ev.key] = ev.state;
         break;
@@ -133,25 +147,37 @@ export const useTravelStore = defineStore('travel', () => {
             role: 'assistant',
             kind: 'text',
             text: '',
-            createdAt: 'now'
+            // Results arrived before the first token: show the accordions
+            // above the answer from the start instead of popping them in
+            // at the end.
+            ...(pendingResults.length ? { subagentResults: [...pendingResults] } : {}),
+            createdAt: new Date().toISOString()
           };
         }
         streaming.value = { ...streaming.value, text: (streaming.value.text ?? '') + ev.text };
         break;
       case 'message':
         if (streaming.value) {
+          if (pendingResults.length) {
+            streaming.value = { ...streaming.value, subagentResults: [...pendingResults] };
+          }
           cache.value[streaming.value.id] = streaming.value;
           messageIds.value.push(streaming.value.id);
           streaming.value = null;
+          pendingResults = [];
         }
         cache.value[ev.message.id] = ev.message;
         messageIds.value.push(ev.message.id);
         break;
       case 'done':
         if (streaming.value) {
+          if (pendingResults.length) {
+            streaming.value = { ...streaming.value, subagentResults: [...pendingResults] };
+          }
           cache.value[streaming.value.id] = streaming.value;
           messageIds.value.push(streaming.value.id);
           streaming.value = null;
+          pendingResults = [];
         }
         break;
       case 'error':
