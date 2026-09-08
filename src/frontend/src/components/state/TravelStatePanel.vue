@@ -3,7 +3,7 @@
      on narrow screens it renders inside a slide-over drawer instead. -->
 <script setup lang="ts">
 import ProgressBar from 'primevue/progressbar';
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useLocalStorageToggle } from '../../composables/useLocalStorageToggle';
 import { useTravelStore } from '../../stores/travel';
 
@@ -18,6 +18,30 @@ const [budgetOpen, toggleBudget] = useLocalStorageToggle('state-budget-open');
 
 const confirmed = computed(() => travel.requirements.filter((r) => r.value));
 const missing = computed(() => travel.requirements.filter((r) => !r.value));
+
+// Briefly highlight rows whose value just changed via a live stream update,
+// so the eye catches what the agent just filled in. Skipped on first load.
+const flashKeys = ref<Set<string>>(new Set());
+let prevSnapshot: string | null = null;
+watch(
+  () => travel.requirements.map((r) => `${r.key}=${r.value ?? ''}`).join('|'),
+  (snap) => {
+    if (prevSnapshot !== null && snap !== prevSnapshot) {
+      const prev = new Map(prevSnapshot.split('|').map((p) => p.split('=') as [string, string]));
+      const changed: string[] = [];
+      for (const part of snap.split('|')) {
+        const [key, val] = part.split('=') as [string, string];
+        if (val && prev.get(key) !== val) changed.push(key);
+      }
+      if (changed.length) {
+        flashKeys.value = new Set(changed);
+        setTimeout(() => { flashKeys.value = new Set(); }, 1600);
+      }
+    }
+    prevSnapshot = snap;
+  },
+  { immediate: true }
+);
 
 const researchRows = computed(() => [
   { label: 'Weather', state: travel.research.weather },
@@ -45,15 +69,16 @@ const fmt = (n: number) => `${travel.budget.currency}${n.toLocaleString()}`;
       <div class="collapse" :class="{ closed: !reqOpen }">
         <div class="clip">
       <dl>
-        <div v-for="r in confirmed" :key="r.key" class="req">
+        <div v-for="r in confirmed" :key="r.key" class="req" :class="{ flash: flashKeys.has(r.key) }">
           <dt>{{ r.label }}</dt>
           <dd>{{ r.value }}</dd>
         </div>
       </dl>
       <div v-if="missing.length" class="missing">
+        <p v-if="!confirmed.length" class="empty">Tell me about your trip to get started.</p>
         <p class="missing-title">Not specified</p>
         <ul>
-          <li v-for="r in missing" :key="r.key"><i class="pi pi-circle" /> {{ r.label }}</li>
+          <li v-for="r in missing" :key="r.key">{{ r.label }}</li>
         </ul>
       </div>
         </div>
@@ -148,39 +173,55 @@ dl {
   gap: 12px;
   padding: 5px 0;
   border-bottom: 1px dashed var(--p-surface-200);
+  border-radius: 4px;
   font-size: 0.88rem;
 }
 .req dt {
   color: var(--p-surface-500);
+  flex: none;
 }
 .req dd {
   margin: 0;
   font-weight: 500;
   text-align: right;
+  min-width: 0;
+}
+/* Flash on rows just filled in by a live update. */
+.req.flash {
+  animation: req-flash 1.6s ease-out;
+}
+@keyframes req-flash {
+  0% { background: color-mix(in srgb, var(--p-primary-500) 25%, transparent); }
+  100% { background: transparent; }
 }
 /* Unspecified requirements */
 .missing {
   margin-top: 10px;
 }
+.empty {
+  font-size: 0.85rem;
+  color: var(--p-surface-500);
+  margin: 0 0 10px;
+}
 .missing-title {
   font-size: 0.78rem;
   color: var(--p-surface-500);
-  margin: 0 0 4px;
+  margin: 0 0 6px;
 }
 .missing ul {
   list-style: none;
   margin: 0;
   padding: 0;
-  font-size: 0.85rem;
-  color: var(--p-surface-500);
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  flex-wrap: wrap;
+  gap: 6px;
 }
-.missing i {
-  font-size: 0.5rem;
-  margin-right: 6px;
-  vertical-align: middle;
+.missing li {
+  border: 1px dashed var(--p-surface-300);
+  color: var(--p-surface-500);
+  border-radius: 99px;
+  padding: 3px 10px;
+  font-size: 0.8rem;
 }
 /* Research checklist */
 .research {
