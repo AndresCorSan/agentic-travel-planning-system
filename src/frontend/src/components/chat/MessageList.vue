@@ -15,7 +15,7 @@ const props = defineProps<{
   streaming: ChatMessage | null;
   chosenDestination: string | null;
 }>();
-const emit = defineEmits<{ choose: [id: string, name: string] }>();
+const emit = defineEmits<{ choose: [messageId: string, id: string, name: string] }>();
 
 const scroller = ref<HTMLElement | null>(null);
 
@@ -45,14 +45,14 @@ watch([() => props.messages.length, () => props.loading, () => props.streaming?.
     <div class="inner">
       <template v-for="m in messages" :key="m.id">
         <UserMessage v-if="m.role === 'user'" :text="m.text ?? ''" :time="m.createdAt" />
-        <AssistantMessage v-else :message="m" :chosen-destination="chosenDestination" @choose="(id, name) => emit('choose', id, name)" />
+        <AssistantMessage v-else :message="m" :chosen-destination="chosenDestination" @choose="(messageId, id, name) => emit('choose', messageId, id, name)" />
       </template>
       <AgentStatusBlock v-if="showStatus" :status="statusText" :agents="agents" />
       <div v-if="streaming?.text" class="streaming-live">
         <AssistantMessage
           :message="streaming"
           :chosen-destination="chosenDestination"
-          @choose="(id, name) => emit('choose', id, name)"
+          @choose="(messageId, id, name) => emit('choose', messageId, id, name)"
         />
       </div>
       <div v-if="!messages.length && !loading" class="page-empty">

@@ -18,6 +18,9 @@ export interface ChatMessage {
   /** Outputs of the specialist subagents for this turn (backend streams
       them via `agent.result`); rendered as accordions above the text. */
   subagentResults?: SubagentResult[];
+  /** Destination candidates for `destinations` messages (backend streams
+      them from the destination research branch); rendered as a carousel. */
+  destinations?: Destination[];
   /** Payload id for rich kinds (destination list, option list, …). Unread by
       current renderers, which fetch mock payloads directly; kept for the
       backend contract, which will serve payloads by id. */
@@ -88,6 +91,8 @@ export interface Destination {
   id: string;
   name: string;
   country: string;
+  /** ISO 3166-1 alpha-2 lowercase (backend candidates); drives the flag image. */
+  country_code?: string;
   tagline: string;
   highlights: string[];
   suitability: number;

@@ -1,7 +1,7 @@
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode, tools_condition
-from app.agents.nodes.destinations import destination_research, display_destination_results, wait_for_decision
+from app.agents.nodes.destinations import destination_research, route_after_decision, wait_for_decision
 from app.agents.nodes.extract import extract_requirements
 from app.agents.nodes.main_llm import main_llm_node, main_tools
 from app.agents.nodes.orchestrator import orchestrator, route_to_agents, set_available_agents
@@ -21,9 +21,6 @@ def build_graph(mcp_tools, checkpointer=None):
     builder.add_node("router", research_router)
 
     builder.add_node("destination_research", destination_research)
-    # TODO(phase8): display_results (print) and wait_for_decision (console
-    # interrupt) block the request; replace with SSE events / resume endpoint.
-    builder.add_node("display_results", display_destination_results)
     builder.add_node("wait_for_decision", wait_for_decision)
 
     # Parallel multi-agent orchestration. Only subagents with working
@@ -59,9 +56,14 @@ def build_graph(mcp_tools, checkpointer=None):
         },
     )
 
-    builder.add_edge("destination_research", "display_results")
-    builder.add_edge("display_results", "wait_for_decision")
-    builder.add_edge("wait_for_decision", "main_llm")
+    builder.add_edge("destination_research", "wait_for_decision")
+    # Carousel selections ("Let's go with ...") confirm directly; any other
+    # reply re-enters the full loop so changes update requirements/research.
+    builder.add_conditional_edges(
+        "wait_for_decision",
+        route_after_decision,
+        ["main_llm", "extract_requirements"],
+    )
 
     # New edges for parallel multi-agent orchestration
     builder.add_conditional_edges(

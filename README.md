@@ -180,7 +180,7 @@ capability to the system.
 - [x] Create initial frontend prototype
 - [x] Expose the LangGraph workflow through a minimal web interface
 - [x] Build the conversational chat interface
-- [ ] Support multi-turn conversations and LangGraph interrupts/resume
+- [x] Support multi-turn conversations and LangGraph interrupts/resume
 - [ ] Support thread-based conversations
 - [x] Display current travel requirements and planning state
 - [ ] Display itinerary and budget information

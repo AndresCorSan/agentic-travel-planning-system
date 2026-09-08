@@ -29,6 +29,12 @@ export const useTravelStore = defineStore('travel', () => {
   const streamStatus = ref('Reasoning…');
   const agentRows = ref<AgentRow[]>([]);
   const streaming = ref<ChatMessage | null>(null);
+  // Optimistic per-message votes (carousel Choose clicks): shown instantly
+  // as Selected until the confirmed destination arrives via requirements.
+  const voted = ref<Record<string, string>>({});
+  function vote(messageId: string, name: string) {
+    voted.value[messageId] = name;
+  }
   // Specialist outputs buffered during the current turn (`agent.result`
   // events); attached to the assistant message when it is finalized.
   let pendingResults: SubagentResult[] = [];
@@ -196,7 +202,7 @@ export const useTravelStore = defineStore('travel', () => {
     }
   }
 
-  return { messages, loading, streamStatus, agentRows, streaming, requirements, research, budget, loadConversation, send, choose };
+  return { messages, loading, streamStatus, agentRows, streaming, requirements, research, budget, voted, vote, loadConversation, send, choose };
 });
 
 export const useLibraryStore = defineStore('library', () => {

@@ -12,7 +12,7 @@ import MessageTime from './MessageTime.vue';
 import { renderRich } from './richtext';
 
 const props = defineProps<{ message: ChatMessage; chosenDestination: string | null }>();
-const emit = defineEmits<{ choose: [id: string, name: string] }>();
+const emit = defineEmits<{ choose: [messageId: string, id: string, name: string] }>();
 
 const html = computed(() => (props.message.text ? renderRich(props.message.text) : ''));
 </script>
@@ -25,8 +25,10 @@ const html = computed(() => (props.message.text ? renderRich(props.message.text)
       <div v-if="html" class="prose" v-html="html" />
       <DestinationRecommendation
         v-if="message.kind === 'destinations'"
+        :message-id="message.id"
         :chosen="chosenDestination"
-        @choose="(id, name) => emit('choose', id, name)"
+        :items="message.destinations"
+        @choose="(messageId, id, name) => emit('choose', messageId, id, name)"
       />
       <TravelOptionCard v-else-if="message.kind === 'options'" />
       <BudgetSummary v-else-if="message.kind === 'budget'" />

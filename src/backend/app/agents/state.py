@@ -48,6 +48,10 @@ class DestinationCandidate(BaseModel):
     destination: str
     score: float
     reason: str
+    country: str = ""
+    country_code: str = ""
+    highlights: list[str] = Field(default_factory=list)
+    drawback: str = ""
 
 class AgentTask(BaseModel):
     agent: Literal[

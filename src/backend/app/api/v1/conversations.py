@@ -87,6 +87,28 @@ def _format_budget(budget, currency) -> str | None:
     return f"{prefix}{amount}"
 
 
+def _candidate_to_card(candidate, index: int) -> dict:
+    """DestinationCandidate (pydantic or dict) -> frontend Destination card."""
+    get = lambda name, default=None: (
+        getattr(candidate, name, default)
+        if not isinstance(candidate, dict) else candidate.get(name, default)
+    )
+    score = get("score", 0) or 0
+    code = (get("country_code", "") or "").strip().lower()
+    if len(code) != 2 or not code.isalpha():
+        code = ""
+    return {
+        "id": f"dest-{index}",
+        "name": get("destination", "Unknown"),
+        "country": get("country", "") or "",
+        "country_code": code,
+        "tagline": get("reason", "") or "",
+        "highlights": get("highlights", []) or [],
+        "suitability": int(round(float(score) * 10)),
+        "drawback": get("drawback", "") or "",
+    }
+
+
 def _requirements_to_items(req) -> list[dict]:
     """TravelRequirements -> RequirementItem[] for the Travel State panel."""
     if req is None:
@@ -186,11 +208,36 @@ async def _stream(graph, conversation_id: str, message: str):
                         status = STATUS_BY_ROUTE.get(output["next_step"])
                         if status:
                             yield _frame("status", {"text": status})
+                    elif node == "destination_research" and output.get("destination_candidates"):
+                        candidates = output["destination_candidates"]
+                        yield _frame(
+                            "message",
+                            {
+                                "message": {
+                                    "id": f"m{uuid.uuid4().hex[:8]}",
+                                    "role": "assistant",
+                                    "kind": "destinations",
+                                    "text": "Here are my top picks — choose one or tell me what to adjust.",
+                                    "destinations": [
+                                        _candidate_to_card(c, i) for i, c in enumerate(candidates)
+                                    ],
+                                    "createdAt": datetime.now(timezone.utc).isoformat(),
+                                }
+                            },
+                        )
                     elif node == "orchestrator":
                         agents = [a for a in (_task_agent(t) for t in output.get("orchestration_plan", [])) if a]
                         if agents:
                             yield _frame("status", {"text": "Executing specialized subagents…"})
                             yield _frame("agents.start", {"agents": agents})
+                    elif node == "main_tools" and output.get("requirements") is not None:
+                        # update_requirements returns a Command carrying the new
+                        # requirements: push them live instead of waiting for
+                        # the turn to finish.
+                        yield _frame(
+                            "requirements.updated",
+                            {"requirements": _requirements_to_items(output["requirements"])},
+                        )
                     elif node in RESEARCH_KEY_BY_AGENT:
                         yield _frame("agent.done", {"id": node})
                         yield _frame(
@@ -220,7 +267,13 @@ async def _stream(graph, conversation_id: str, message: str):
                 )
         yield "event: done\ndata: {}\n\n"
     except Exception as exc:
-        yield _frame("error", {"message": str(exc)})
+        if getattr(exc, "status_code", None) == 429 or "429" in str(exc):
+            yield _frame(
+                "error",
+                {"message": "All models are busy right now, please retry in a minute."},
+            )
+        else:
+            yield _frame("error", {"message": str(exc)})
 
 
 @router.post("/conversations/{conversation_id}/messages")
