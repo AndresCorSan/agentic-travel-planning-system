@@ -1,8 +1,12 @@
 import type { ResearchKey, StreamEvent } from '../types';
 
+// First line of the user message for UI button saves. Must stay
+// in sync with SAVED_CHOICES_PREFIX in backend app/agents/tools/plan.py:
+// the backend short-circuits extract+router on it.
+export const SAVED_CHOICES_PREFIX = "I'll go with:";
+
 // Subagent id -> human label for the live status block.
-export const AGENT_LABELS: Record<string, string> = {
-  weather_agent: 'Weather',
+export const AGENT_LABELS: Record<string, string> = {  weather_agent: 'Weather',
   accommodation_agent: 'Accommodation',
   transportation_agent: 'Transportation',
   activities_agent: 'Activities',

@@ -4,8 +4,9 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import * as service from '../api/travelService';
-import { AGENT_LABELS, AGENT_RESEARCH_KEY } from '../api/stream';
-import type { SubagentResult, AgentRow, BudgetSummary, ChatMessage, Conversation, ResearchStatus, RequirementItem, SavedPlan, StreamEvent } from '../types';
+import { AGENT_LABELS, AGENT_RESEARCH_KEY, SAVED_CHOICES_PREFIX } from '../api/stream';
+import type { SubagentResult, AgentRow, BudgetSummary, ChatMessage, Conversation, PlanItem, PlanOption, ResearchStatus, RequirementItem, SavedPlan, StreamEvent } from '../types';
+import { SINGLE_CHOICE_CATEGORIES } from '../types';
 
 export const useTravelStore = defineStore('travel', () => {
   const BACKEND_MODE = import.meta.env.VITE_USE_BACKEND === 'true';
@@ -22,6 +23,87 @@ export const useTravelStore = defineStore('travel', () => {
   const research = ref<ResearchStatus>(BACKEND_MODE ? service.emptyResearch() : service.fullResearch());
   // Static mock snapshot (never reassigned yet); the backend will own it.
   const budget = ref<BudgetSummary>(BACKEND_MODE ? service.emptyBudget() : service.lisbonBudget());
+  // Selectable options published by main_llm (`options` events), by category.
+  // A republish for a category replaces its list (new searches overwrite).
+  const optionsByCategory = ref<Record<string, PlanOption[]>>({});
+  const optionsById = computed(() => {
+    const map: Record<string, PlanOption & { category: string }> = {};
+    for (const [category, opts] of Object.entries(optionsByCategory.value)) {
+      for (const o of opts) map[o.id] = { ...o, category };
+    }
+    return map;
+  });
+  // Trip plan saved choices (`plan.updated` events).
+  const plan = ref<PlanItem[]>([]);
+  const planTotal = ref(0);
+  const planCurrency = ref<string | null>(null);
+  const planOverBudget = ref(false);
+  // Per-message selection drafts for the inline option controls, plus
+  // messages already saved (controls locked afterwards).
+  const drafts = ref<Record<string, Record<string, boolean>>>({});
+  const choicesSaved = ref<Record<string, boolean>>({});
+  function toggleOption(messageId: string, optionId: string) {
+    const opt = optionsById.value[optionId];
+    if (!opt || choicesSaved.value[messageId]) return;
+    const draft = { ...(drafts.value[messageId] ?? {}) };
+    const next = !draft[optionId];
+    if (next && SINGLE_CHOICE_CATEGORIES.includes(opt.category)) {
+      for (const [id, on] of Object.entries(draft)) {
+        if (on && optionsById.value[id]?.category === opt.category) draft[id] = false;
+      }
+    }
+    draft[optionId] = next;
+    drafts.value = { ...drafts.value, [messageId]: draft };
+  }
+  function draftChoices(messageId: string): { category: string; option_id: string }[] {
+    const draft = drafts.value[messageId] ?? {};
+    return Object.entries(draft)
+      .filter(([, on]) => on)
+      .map(([id]) => ({ category: optionsById.value[id]?.category ?? '', option_id: id }))
+      .filter((c) => c.category);
+  }
+  async function saveChoices(messageId: string) {
+    const choices = draftChoices(messageId);
+    if (!choices.length || choicesSaved.value[messageId]) return;
+    loading.value = true;
+    try {
+      if (BACKEND_MODE) {
+        // 1. Deterministic save (no LLM). 2. Same user message through the
+        // normal pipeline — like "Let's go with…" for destinations — where
+        // extract+router short-circuit straight to main_llm for confirmation.
+        const labels = await service.saveChoices(conversationId.value, choices);
+        choicesSaved.value = { ...choicesSaved.value, [messageId]: true };
+        const names = labels.length
+          ? labels
+          : choices.map((c) => optionsById.value[c.option_id]?.label ?? c.option_id);
+        // Friendly list ordered by category (no prices): the first line is
+        // the prefix the backend short-circuits on.
+        const order = (c: string) => {
+          const idx = ['transportation', 'accommodation', 'rental_car', 'activities'].indexOf(c);
+          return idx < 0 ? 99 : idx;
+        };
+        const catLabel = (c: string) => {
+          const words = c.replace(/_/g, ' ');
+          return words.charAt(0).toUpperCase() + words.slice(1);
+        };
+        const named = choices.map((c, i) => ({
+          category: c.category,
+          name: names[i] ?? c.option_id,
+        }));
+        // One line per category (multi-choice ones join with commas).
+        const byCategory = new Map<string, string[]>();
+        for (const n of named.sort((a, b) => order(a.category) - order(b.category))) {
+          const list = byCategory.get(n.category) ?? [];
+          list.push(n.name);
+          byCategory.set(n.category, list);
+        }
+        const lines = [...byCategory].map(([c, ns]) => `- ${catLabel(c)}: ${ns.join(', ')}`);
+        await send(`${SAVED_CHOICES_PREFIX}\n${lines.join('\n')}`);
+      }
+    } finally {
+      loading.value = false;
+    }
+  }
 
   const messages = computed(() => messageIds.value.map((id) => cache.value[id]).filter(Boolean));
 
@@ -38,6 +120,17 @@ export const useTravelStore = defineStore('travel', () => {
   // Specialist outputs buffered during the current turn (`agent.result`
   // events); attached to the assistant message when it is finalized.
   let pendingResults: SubagentResult[] = [];
+  // Options published during the current turn (`options` events). If the
+  // finalized message carries no [[option:id]] flags (the LLM skipped
+  // them), these render as an automatic block under that message instead
+  // of losing the choice controls for the turn.
+  let pendingTurnOptions: { category: string; options: PlanOption[] }[] = [];
+  const optionsByMessage = ref<Record<string, { category: string; options: PlanOption[] }[]>>({});
+  function attachPendingOptions(messageId: string) {
+    if (!pendingTurnOptions.length) return;
+    optionsByMessage.value = { ...optionsByMessage.value, [messageId]: pendingTurnOptions };
+    pendingTurnOptions = [];
+  }
   let streamCounter = 1000;
 
   async function loadConversation(id: string, ids: string[]) {
@@ -49,6 +142,15 @@ export const useTravelStore = defineStore('travel', () => {
         messageIds.value = [];
         requirements.value = service.emptyRequirements();
         research.value = service.emptyResearch();
+        budget.value = service.emptyBudget();
+        optionsByCategory.value = {};
+        plan.value = [];
+        planTotal.value = 0;
+        planCurrency.value = null;
+        planOverBudget.value = false;
+        drafts.value = {};
+        choicesSaved.value = {};
+        optionsByMessage.value = {};
         agentRows.value = [];
         streaming.value = null;
         streamStatus.value = '';
@@ -91,6 +193,7 @@ export const useTravelStore = defineStore('travel', () => {
         agentRows.value = [];
         streaming.value = null;
         pendingResults = [];
+        pendingTurnOptions = [];
         for await (const ev of service.streamMessage(conversationId.value, text)) applyEvent(ev);
         streaming.value = null;
         keepPending = true;
@@ -146,6 +249,21 @@ export const useTravelStore = defineStore('travel', () => {
       case 'requirements.updated':
         requirements.value = ev.requirements;
         break;
+      case 'options':
+        optionsByCategory.value = { ...optionsByCategory.value, [ev.category]: ev.options };
+        pendingTurnOptions = [
+          ...pendingTurnOptions.filter((g) => g.category !== ev.category),
+          { category: ev.category, options: ev.options },
+        ];
+        break;
+      case 'plan.updated':
+        plan.value = ev.plan;
+        planTotal.value = ev.total;
+        planCurrency.value = ev.currency;
+        planOverBudget.value = ev.overBudget;
+        // The Budget panel's Estimated is the deterministic plan total.
+        budget.value = { ...budget.value, estimated: ev.total };
+        break;
       case 'token':
         if (!streaming.value) {
           streaming.value = {
@@ -169,11 +287,13 @@ export const useTravelStore = defineStore('travel', () => {
           }
           cache.value[streaming.value.id] = streaming.value;
           messageIds.value.push(streaming.value.id);
+          if (ev.message.role !== 'assistant') attachPendingOptions(streaming.value.id);
           streaming.value = null;
           pendingResults = [];
         }
         cache.value[ev.message.id] = ev.message;
         messageIds.value.push(ev.message.id);
+        if (ev.message.role === 'assistant') attachPendingOptions(ev.message.id);
         break;
       case 'done':
         if (streaming.value) {
@@ -182,6 +302,7 @@ export const useTravelStore = defineStore('travel', () => {
           }
           cache.value[streaming.value.id] = streaming.value;
           messageIds.value.push(streaming.value.id);
+          attachPendingOptions(streaming.value.id);
           streaming.value = null;
           pendingResults = [];
         }
@@ -202,7 +323,7 @@ export const useTravelStore = defineStore('travel', () => {
     }
   }
 
-  return { messages, loading, streamStatus, agentRows, streaming, requirements, research, budget, voted, vote, loadConversation, send, choose };
+  return { messages, loading, streamStatus, agentRows, streaming, requirements, research, budget, voted, vote, loadConversation, send, choose, optionsByCategory, optionsById, plan, planTotal, planCurrency, planOverBudget, drafts, choicesSaved, optionsByMessage, toggleOption, draftChoices, saveChoices };
 });
 
 export const useLibraryStore = defineStore('library', () => {

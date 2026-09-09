@@ -255,6 +255,84 @@ a:hover {
 }
 
 /* ------------------------------------------------------------------
+   Shared: inline option choice controls ([[option:id]] flags).
+------------------------------------------------------------------- */
+.prose .opt-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: inherit;
+  font-size: 0.85rem;
+  color: inherit;
+  background: var(--p-surface-100);
+  border: 1px solid var(--p-surface-200);
+  border-radius: 8px;
+  padding: 4px 10px;
+  margin: 2px;
+  cursor: pointer;
+  vertical-align: middle;
+}
+.prose .opt-pick:hover {
+  border-color: var(--p-primary-400);
+}
+.prose .opt-pick[data-checked="1"] {
+  border-color: var(--p-primary-600);
+  background: color-mix(in srgb, var(--p-primary-500) 12%, transparent);
+}
+.prose .opt-pick[data-locked="1"] {
+  cursor: default;
+  opacity: 0.75;
+}
+.prose .opt-box {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  border: 1.5px solid var(--p-surface-400);
+  background: #fff;
+}
+.prose .opt-pick[data-single="1"] .opt-box {
+  border-radius: 50%;
+}
+.prose .opt-pick[data-single="0"] .opt-box {
+  border-radius: 4px;
+}
+.prose .opt-pick[data-checked="1"] .opt-box {
+  border-color: var(--p-primary-600);
+  background: var(--p-primary-600);
+  box-shadow: inset 0 0 0 2px #fff;
+}
+.prose .opt-label {
+  font-weight: 500;
+}
+.prose .opt-price {
+  font-weight: 700;
+  color: var(--p-primary-700);
+  white-space: nowrap;
+}
+/* Fallback options block (turn published options but prose has no flags). */
+.prose .opt-fallback {
+  margin-top: 10px;
+  border-top: 1px dashed var(--p-surface-200);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.prose .opt-cat {
+  margin: 0 0 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--p-surface-500);
+}
+.prose .opt-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+/* ------------------------------------------------------------------
    Shared: budget bits (travel-state panel + chat budget card).
 ------------------------------------------------------------------- */
 /* NOTE: anchored to .p-progressbar so it beats PrimeVue's injected height. */

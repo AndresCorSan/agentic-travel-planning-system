@@ -6,6 +6,7 @@ import ProgressBar from 'primevue/progressbar';
 import { computed, ref, watch } from 'vue';
 import { useLocalStorageToggle } from '../../composables/useLocalStorageToggle';
 import { useTravelStore } from '../../stores/travel';
+import { formatOptionPrice } from '../chat/richtext';
 
 defineProps<{ drawer?: boolean }>();
 
@@ -14,6 +15,7 @@ const travel = useTravelStore();
 // Persisted open state per section (shared composable).
 const [reqOpen, toggleReq] = useLocalStorageToggle('state-req-open');
 const [researchOpen, toggleResearch] = useLocalStorageToggle('state-research-open');
+const [planOpen, togglePlan] = useLocalStorageToggle('state-plan-open');
 const [budgetOpen, toggleBudget] = useLocalStorageToggle('state-budget-open');
 
 const confirmed = computed(() => travel.requirements.filter((r) => r.value));
@@ -100,6 +102,30 @@ const fmt = (n: number) => `${travel.budget.currency}${n.toLocaleString()}`;
           {{ r.label }}
         </li>
       </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <button class="sec-toggle" @click="togglePlan()" :aria-expanded="planOpen">
+        <i class="pi pi-chevron-down toggle-ic" :class="{ closed: !planOpen }" />
+        Trip plan
+        <span v-if="travel.plan.length" class="muted">{{ formatOptionPrice({ price: travel.planTotal, currency: travel.planCurrency, per_person: false }) }}</span>
+      </button>
+      <div class="collapse" :class="{ closed: !planOpen }">
+        <div class="clip">
+          <p v-if="!travel.plan.length" class="empty">Nothing saved yet — pick options from the chat.</p>
+          <dl v-else>
+            <div v-for="item in travel.plan" :key="`${item.category}:${item.option_id}`" class="req">
+              <dt>{{ item.label }}<span class="muted"> · {{ item.category }}</span></dt>
+              <dd>{{ formatOptionPrice(item) || '—' }}</dd>
+            </div>
+          </dl>
+          <div v-if="travel.plan.length" class="row total">
+            <span>Total</span>
+            <strong>{{ formatOptionPrice({ price: travel.planTotal, currency: travel.planCurrency, per_person: false }) || '—' }}</strong>
+          </div>
+          <p v-if="travel.planOverBudget" class="over">Over budget.</p>
         </div>
       </div>
     </section>
@@ -252,5 +278,20 @@ dl {
   border: 0;
   padding: 0;
   overflow: visible;
+}
+/* Trip plan section */
+.row.total {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.88rem;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--p-surface-200);
+}
+.over {
+  margin: 6px 0 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--p-red-500);
 }
 </style>

@@ -1,6 +1,7 @@
 from langchain_core.messages import SystemMessage
 from app.agents.llm import llm
 from app.agents.state import TravelState
+from app.agents.tools.plan import add_plan_item, present_options, remove_plan_item
 from app.agents.tools.requirements import update_requirements
 from app.agents.utils import current_date_message, sanitize_messages_for_llm
 
@@ -48,12 +49,40 @@ Conversation:
 - Ask for missing information when it is necessary for a specific search.
 - Do not assume a transport mode if the user has not chosen one.
 
+Selectable options (buttons in the UI):
+- When research results arrive, ALWAYS present them first in prose (a
+  short intro plus a comparison table, as usual). Then, in the SAME turn,
+  call present_options once per category (transportation, accommodation,
+  activities, rental_car) with the viable options — the same ones shown
+  in prose, with short stable ids ("t1", "h2"...). Include real prices
+  (per_person true when per traveler). NEVER call present_options without
+  the accompanying prose: a tool-only turn leaves the user with no
+  explanation of the results.
+- A later present_options call for a category replaces its previous list
+  (after a new search, republish the fresh options).
+- After tool calls that only publish options, NEVER list the options again:
+  the user already sees that prose. Close with one short line asking the
+  user to select an option below or request changes if they wish.
+
+Trip plan:
+- The current plan is provided in context. When the user picks by chat
+  ("I'll take the morning flight"), resolve it against the published
+  options and call add_plan_item (option_id preferred). If the request is
+  ambiguous between options, ask which one in the next turn.
+- Messages starting with "I'll go with:" are
+  confirmations of choices already saved: just confirm briefly (what's
+  saved, running total, what's missing) without calling plan tools.
+- After anything is saved or removed, confirm briefly: what changed, the
+  running total, and what is still missing.
+- When the user asks to keep searching a category, research continues and
+  old options for it are replaced — saved plan items are untouched.
+
 Scope:
 - Only answer questions related to travel planning and your capabilities.
 - If the user asks about something outside your scope, briefly explain that you cannot help with it.
 """
 
-main_tools = [update_requirements]
+main_tools = [update_requirements, present_options, add_plan_item, remove_plan_item]
 main_llm = llm.bind_tools(main_tools)
 
 async def main_llm_node(state: TravelState) -> dict:
@@ -100,6 +129,22 @@ async def main_llm_node(state: TravelState) -> dict:
             SystemMessage(
                 content="Research results from specialist agents:\n\n"
                 + "\n\n".join(subagents_results)
+            )
+        )
+
+    # ...+ the current trip plan and published options (if any) +...
+    if state.get("available_options"):
+        messages.append(
+            SystemMessage(
+                content="Published selectable options by category:\n"
+                + f"{state['available_options']}"
+            )
+        )
+    if state.get("trip_plan"):
+        messages.append(
+            SystemMessage(
+                content="Current trip plan (already chosen):\n"
+                + f"{state['trip_plan']}"
             )
         )
 

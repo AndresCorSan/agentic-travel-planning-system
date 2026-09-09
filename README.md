@@ -160,7 +160,7 @@ capability to the system.
 
 ### Phase 6 — Plan & Budget
 
-- [ ] Define the structured travel-plan representation
+- [x] Define the structured travel-plan representation
 - [ ] Generate a complete itinerary from the research results
 - [ ] Add deterministic budget calculation
 - [ ] Add hard-constraint validation

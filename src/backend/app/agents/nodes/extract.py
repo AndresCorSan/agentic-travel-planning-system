@@ -1,6 +1,7 @@
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from app.agents.llm import low_reasoning_llm
 from app.agents.state import TravelRequirements, TravelState
+from app.agents.tools.plan import SAVED_CHOICES_PREFIX
 from app.agents.utils import current_date_message, sanitize_messages_for_llm
 
 REQUIREMENTS_EXTRACTION_PROMPT = """
@@ -25,6 +26,11 @@ requirements_llm = low_reasoning_llm.with_structured_output(
 )
 
 async def extract_requirements(state: TravelState):
+    messages = state.get("messages") or []
+    # Saved-choices confirmations carry no new requirements and already
+    # updated the plan deterministically: skip the LLM call entirely.
+    if messages and isinstance(messages[-1], HumanMessage) and str(messages[-1].content or "").startswith(SAVED_CHOICES_PREFIX):
+        return {}
     response = await requirements_llm.ainvoke([
         SystemMessage(content=REQUIREMENTS_EXTRACTION_PROMPT),
         current_date_message(),

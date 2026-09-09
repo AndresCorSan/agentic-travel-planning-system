@@ -76,10 +76,31 @@ export type StreamEvent =
   | { type: 'agent.result'; id: string; text: string }
   | { type: 'research.update'; key: ResearchKey; state: ResearchState }
   | { type: 'requirements.updated'; requirements: RequirementItem[] }
+  | { type: 'options'; category: string; options: PlanOption[] }
+  | { type: 'plan.updated'; plan: PlanItem[]; total: number; currency: string | null; budget: number | null; overBudget: boolean }
   | { type: 'token'; text: string }
   | { type: 'message'; message: ChatMessage }
   | { type: 'done' }
   | { type: 'error'; message: string };
+
+/** One selectable option published by main_llm (via the `options` event). */
+export interface PlanOption {
+  id: string;
+  label: string;
+  price: number | null;
+  currency: string | null;
+  per_person: boolean;
+  details: string;
+}
+
+/** A user choice saved into the trip plan (snapshot, via `plan.updated`). */
+export interface PlanItem extends PlanOption {
+  category: string;
+  option_id: string;
+}
+
+/** Categories where a new choice replaces the previous one. */
+export const SINGLE_CHOICE_CATEGORIES = ['transportation', 'accommodation', 'rental_car'];
 
 export interface BudgetSummary {
   estimated: number;

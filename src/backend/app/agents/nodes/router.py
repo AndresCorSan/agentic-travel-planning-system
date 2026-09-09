@@ -1,8 +1,9 @@
 from typing import Literal
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel
 from app.agents.llm import light_llm
 from app.agents.state import TravelState
+from app.agents.tools.plan import SAVED_CHOICES_PREFIX
 from app.agents.utils import sanitize_messages_for_llm
 
 RESEARCH_ROUTER_PROMPT = """
@@ -41,6 +42,11 @@ class ResearchDecision(BaseModel):
 structured_router_llm = light_llm.with_structured_output(ResearchDecision)
 
 async def research_router(state: TravelState):
+    messages = state.get("messages") or []
+    # Saved-choices confirmations only need the main LLM to acknowledge:
+    # skip the routing call and go straight there.
+    if messages and isinstance(messages[-1], HumanMessage) and str(messages[-1].content or "").startswith(SAVED_CHOICES_PREFIX):
+        return {"next_step": "main_llm"}
     response = await structured_router_llm.ainvoke([
         SystemMessage(content=RESEARCH_ROUTER_PROMPT),
         *sanitize_messages_for_llm(state["messages"]),

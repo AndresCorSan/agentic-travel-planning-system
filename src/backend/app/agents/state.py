@@ -66,6 +66,39 @@ class AgentTask(BaseModel):
 class OrchestrationPlan(BaseModel):
     tasks: list[AgentTask]
 
+class PlanOption(BaseModel):
+    """One selectable option presented by main_llm for a category.
+
+    Stored in state so both UI buttons (by id) and chat choices (by LLM
+    matching) resolve against the same canonical list.
+    """
+
+    id: str
+    label: str
+    price: float | None = None
+    currency: str | None = None
+    per_person: bool = False
+    details: str = ""
+
+class PlanItem(BaseModel):
+    """A user choice saved into the trip plan.
+
+    Snapshots label/price at save time so later overwrites of
+    available_options (new searches) never break the plan.
+    """
+
+    category: str
+    option_id: str
+    label: str
+    price: float | None = None
+    currency: str | None = None
+    per_person: bool = False
+    details: str = ""
+
+# Categories where a new choice replaces the previous one (vs activities,
+# which accumulates). Must stay in sync with the main_llm prompt.
+SINGLE_CHOICE_CATEGORIES = ("transportation", "accommodation", "rental_car")
+
 class TravelState(TypedDict):
     messages: Annotated[list, add_messages]
     requirements: TravelRequirements | None
@@ -81,3 +114,7 @@ class TravelState(TypedDict):
     transportation_results: Annotated[list, add]
     activity_results: Annotated[list, add]
     rental_car_results: Annotated[list, add]
+
+    # Selectable options per category + the user's saved trip plan
+    available_options: dict[str, list[PlanOption]]
+    trip_plan: list[PlanItem]

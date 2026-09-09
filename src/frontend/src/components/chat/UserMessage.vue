@@ -31,6 +31,7 @@ defineProps<{ text: string; time: string }>();
 .user-bubble p {
   margin: 0;
   font-size: 0.92rem;
+  white-space: pre-line;
 }
 .time {
   font-size: 0.7rem;

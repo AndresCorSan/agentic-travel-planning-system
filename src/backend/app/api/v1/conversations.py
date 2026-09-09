@@ -9,12 +9,23 @@ from langgraph.types import Command
 from pydantic import BaseModel
 
 from app.core.dependencies import get_graph
+from app.agents.state import PlanItem, SINGLE_CHOICE_CATEGORIES
+from app.agents.tools.plan import plan_total
 
 router = APIRouter()
 
 
 class SendMessageRequest(BaseModel):
     message: str
+
+
+class ChoiceItem(BaseModel):
+    category: str
+    option_id: str
+
+
+class SaveChoicesRequest(BaseModel):
+    choices: list[ChoiceItem]
 
 
 STATUS_BY_ROUTE = {
@@ -85,6 +96,54 @@ def _format_budget(budget, currency) -> str | None:
     prefix = symbol if symbol is not None else (f"{code} " if code else "")
     amount = f"{budget:,.0f}" if float(budget).is_integer() else f"{budget:,.2f}"
     return f"{prefix}{amount}"
+
+
+def _option_to_dict(opt) -> dict:
+    """PlanOption (pydantic or dict) -> frontend payload."""
+    get = lambda name, default=None: (
+        getattr(opt, name, default)
+        if not isinstance(opt, dict) else opt.get(name, default)
+    )
+    return {
+        "id": str(get("id", "")),
+        "label": get("label", "") or "",
+        "price": get("price"),
+        "currency": get("currency"),
+        "per_person": bool(get("per_person", False)),
+        "details": get("details", "") or "",
+    }
+
+
+def _plan_payload(values: dict) -> dict:
+    """Trip plan + deterministic total for the Plan panel / Budget."""
+    raw_plan = (values or {}).get("trip_plan") or []
+    req = (values or {}).get("requirements")
+    get = lambda name: getattr(req, name, None) if not isinstance(req, dict) else (req or {}).get(name)
+    travelers = get("travelers")
+    budget = get("budget")
+    items = []
+    for it in raw_plan:
+        get_it = lambda name, default=None: (
+            getattr(it, name, default)
+            if not isinstance(it, dict) else it.get(name, default)
+        )
+        items.append({
+            "category": get_it("category"),
+            "option_id": str(get_it("option_id", "")),
+            "label": get_it("label", "") or "",
+            "price": get_it("price"),
+            "currency": get_it("currency"),
+            "per_person": bool(get_it("per_person", False)),
+            "details": get_it("details", "") or "",
+        })
+    total, currency = plan_total(raw_plan, travelers)
+    return {
+        "plan": items,
+        "total": total,
+        "currency": currency,
+        "budget": budget,
+        "overBudget": bool(budget and total > float(budget)),
+    }
 
 
 def _candidate_to_card(candidate, index: int) -> dict:
@@ -183,6 +242,10 @@ async def _stream(graph, conversation_id: str, message: str):
         else:
             yield _frame("status", {"text": "Understanding your request…"})
             stream_input = {"messages": [HumanMessage(content=message)]}
+        # Set after a main_tools update: the next main_llm tokens start a
+        # new reply but stream into the same bubble, so separate them
+        # with a blank line (markdown collapses extras, harmless).
+        tools_ran = False
         async for mode, payload in graph.astream(
             stream_input, config=config, stream_mode=["updates", "messages"]
         ):
@@ -192,6 +255,9 @@ async def _stream(graph, conversation_id: str, message: str):
                     continue
                 content = getattr(chunk, "content", "")
                 if isinstance(content, str) and content:
+                    if tools_ran:
+                        content = "\n\n" + content.lstrip("\n")
+                        tools_ran = False
                     yield _frame("token", {"text": content})
             elif mode == "updates":
                 if not isinstance(payload, dict):
@@ -234,10 +300,29 @@ async def _stream(graph, conversation_id: str, message: str):
                         # update_requirements returns a Command carrying the new
                         # requirements: push them live instead of waiting for
                         # the turn to finish.
+                        tools_ran = True
                         yield _frame(
                             "requirements.updated",
                             {"requirements": _requirements_to_items(output["requirements"])},
                         )
+                    if node == "main_tools" and output.get("available_options") is not None:
+                        # present_options published selectable options: push
+                        # each category so the UI can render choice controls.
+                        tools_ran = True
+                        for category, opts in (output["available_options"] or {}).items():
+                            yield _frame(
+                                "options",
+                                {
+                                    "category": category,
+                                    "options": [_option_to_dict(o) for o in (opts or [])],
+                                },
+                            )
+                    if node == "main_tools" and output.get("trip_plan") is not None:
+                        # add/remove_plan_item changed the plan: push items +
+                        # deterministic total live.
+                        tools_ran = True
+                        state_now = await graph.aget_state(config)
+                        yield _frame("plan.updated", _plan_payload(state_now.values or {}))
                     elif node in RESEARCH_KEY_BY_AGENT:
                         yield _frame("agent.done", {"id": node})
                         yield _frame(
@@ -251,6 +336,8 @@ async def _stream(graph, conversation_id: str, message: str):
         req = (final.values or {}).get("requirements")
         if req is not None:
             yield _frame("requirements.updated", {"requirements": _requirements_to_items(req)})
+        if (final.values or {}).get("trip_plan"):
+            yield _frame("plan.updated", _plan_payload(final.values or {}))
         for interrupt in final.interrupts or []:
             if isinstance(interrupt.value, str) and interrupt.value:
                 yield _frame(
@@ -274,6 +361,65 @@ async def _stream(graph, conversation_id: str, message: str):
             )
         else:
             yield _frame("error", {"message": str(exc)})
+
+
+@router.post("/conversations/{conversation_id}/choices")
+async def save_choices(conversation_id: str, body: SaveChoicesRequest, graph=Depends(get_graph)):
+    """Save UI button selections deterministically (no LLM resolution).
+
+    Resolves option_ids against available_options, snapshots label/price
+    into the trip plan (replacement per single-choice category). Returns
+    the saved labels; the frontend then sends the user message through
+    the normal pipeline (like "Let's go with…"), where extract+router
+    short-circuit on SAVED_CHOICES_PREFIX straight to main_llm.
+    """
+    if graph is None:
+        raise HTTPException(status_code=503, detail="Graph not initialized")
+    config = {"configurable": {"thread_id": conversation_id}}
+    state = await graph.aget_state(config)
+    values = state.values or {}
+    avail = values.get("available_options") or {}
+    plan = list(values.get("trip_plan") or [])
+
+    def find(category: str, option_id: str):
+        for opt in avail.get(category, []) or []:
+            get = lambda name, default=None: (
+                getattr(opt, name, default)
+                if not isinstance(opt, dict) else opt.get(name, default)
+            )
+            if str(get("id")) == str(option_id):
+                return get
+        return None
+
+    saved: list[str] = []
+    for ch in body.choices:
+        get = find(ch.category, ch.option_id)
+        if get is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Unknown option '{ch.option_id}' for category '{ch.category}'",
+            )
+        item = PlanItem(
+            category=ch.category,
+            option_id=str(ch.option_id),
+            label=get("label", "") or str(ch.option_id),
+            price=get("price"),
+            currency=get("currency"),
+            per_person=bool(get("per_person", False)),
+            details=get("details", "") or "",
+        )
+        key = lambda it: (
+            it["category"] if isinstance(it, dict) else it.category,
+            str(it["option_id"] if isinstance(it, dict) else it.option_id),
+        )
+        if ch.category in SINGLE_CHOICE_CATEGORIES:
+            plan = [it for it in plan if key(it)[0] != ch.category]
+            plan.append(item)
+        elif not any(key(it) == (ch.category, str(ch.option_id)) for it in plan):
+            plan.append(item)
+        saved.append(item.label)
+    await graph.aupdate_state(config, {"trip_plan": plan})
+    return {"saved": saved}
 
 
 @router.post("/conversations/{conversation_id}/messages")

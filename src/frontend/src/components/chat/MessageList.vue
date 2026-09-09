@@ -52,6 +52,7 @@ watch([() => props.messages.length, () => props.loading, () => props.streaming?.
         <AssistantMessage
           :message="streaming"
           :chosen-destination="chosenDestination"
+          :live="true"
           @choose="(messageId, id, name) => emit('choose', messageId, id, name)"
         />
       </div>

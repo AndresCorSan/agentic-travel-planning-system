@@ -36,6 +36,16 @@ export function streamMessage(conversationId: string, text: string): AsyncGenera
   return postStream(`${base}/conversations/${conversationId}/messages`, { message: text });
 }
 
+/** Save UI button selections deterministically; returns the saved labels. */
+export async function saveChoices(
+  conversationId: string,
+  choices: { category: string; option_id: string }[]
+): Promise<string[]> {
+  const base = api.defaults.baseURL ?? '';
+  const res = await api.post(`${base}/conversations/${conversationId}/choices`, { choices });
+  return res.data?.saved ?? [];
+}
+
 /** Local-only placeholder shown instantly while the reply is being generated. */
 export function createPendingUser(text: string): ChatMessage {
   return {
