@@ -419,7 +419,8 @@ async def save_choices(conversation_id: str, body: SaveChoicesRequest, graph=Dep
             plan.append(item)
         saved.append(item.label)
     await graph.aupdate_state(config, {"trip_plan": plan})
-    return {"saved": saved}
+    fresh = await graph.aget_state(config)
+    return {"saved": saved, "plan": _plan_payload(fresh.values or {})}
 
 
 @router.post("/conversations/{conversation_id}/messages")

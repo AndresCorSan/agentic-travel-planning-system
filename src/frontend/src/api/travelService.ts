@@ -14,6 +14,7 @@ import type {
   BudgetSummary,
   ChatMessage,
   Conversation,
+  PlanUpdate,
   ResearchStatus,
   RequirementItem,
   SavedPlan
@@ -36,14 +37,14 @@ export function streamMessage(conversationId: string, text: string): AsyncGenera
   return postStream(`${base}/conversations/${conversationId}/messages`, { message: text });
 }
 
-/** Save UI button selections deterministically; returns the saved labels. */
+/** Save UI button selections deterministically; returns saved labels + plan. */
 export async function saveChoices(
   conversationId: string,
   choices: { category: string; option_id: string }[]
-): Promise<string[]> {
+): Promise<{ saved: string[]; plan: PlanUpdate }> {
   const base = api.defaults.baseURL ?? '';
   const res = await api.post(`${base}/conversations/${conversationId}/choices`, { choices });
-  return res.data?.saved ?? [];
+  return res.data;
 }
 
 /** Local-only placeholder shown instantly while the reply is being generated. */

@@ -5,7 +5,7 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import * as service from '../api/travelService';
 import { AGENT_LABELS, AGENT_RESEARCH_KEY, SAVED_CHOICES_PREFIX } from '../api/stream';
-import type { SubagentResult, AgentRow, BudgetSummary, ChatMessage, Conversation, PlanItem, PlanOption, ResearchStatus, RequirementItem, SavedPlan, StreamEvent } from '../types';
+import type { SubagentResult, AgentRow, BudgetSummary, ChatMessage, Conversation, PlanItem, PlanOption, PlanUpdate, ResearchStatus, RequirementItem, SavedPlan, StreamEvent } from '../types';
 import { SINGLE_CHOICE_CATEGORIES } from '../types';
 
 export const useTravelStore = defineStore('travel', () => {
@@ -39,6 +39,17 @@ export const useTravelStore = defineStore('travel', () => {
   const planCurrency = ref<string | null>(null);
   const planBudget = ref<number | null>(null);
   const planOverBudget = ref(false);
+  // Trip plan application shared by the `plan.updated` event and the
+  // instant UI update right after a button save (server truth both ways).
+  function applyPlan(p: PlanUpdate) {
+    plan.value = p.plan;
+    planTotal.value = p.total;
+    planCurrency.value = p.currency;
+    planBudget.value = p.budget;
+    planOverBudget.value = p.overBudget;
+    // The Budget panel's Estimated is the deterministic plan total.
+    budget.value = { ...budget.value, estimated: p.total };
+  }
   // Per-message selection drafts for the inline option controls, plus
   // messages already saved (controls locked afterwards).
   const drafts = ref<Record<string, Record<string, boolean>>>({});
@@ -72,11 +83,14 @@ export const useTravelStore = defineStore('travel', () => {
         // 1. Deterministic save (no LLM). 2. Same user message through the
         // normal pipeline — like "Let's go with…" for destinations — where
         // extract+router short-circuit straight to main_llm for confirmation.
-        const labels = await service.saveChoices(conversationId.value, choices);
-        choicesSaved.value = { ...choicesSaved.value, [messageId]: true };
-        const names = labels.length
-          ? labels
+        const res = await service.saveChoices(conversationId.value, choices);
+        // Instant UI update from server truth (like the optimistic vote
+        // for destinations); the confirm turn re-syncs afterwards.
+        if (res.plan) applyPlan(res.plan);
+        const names = res.saved?.length
+          ? res.saved
           : choices.map((c) => optionsById.value[c.option_id]?.label ?? c.option_id);
+        choicesSaved.value = { ...choicesSaved.value, [messageId]: true };
         // Friendly list ordered by category (no prices): the first line is
         // the prefix the backend short-circuits on.
         const order = (c: string) => {
@@ -259,13 +273,7 @@ export const useTravelStore = defineStore('travel', () => {
         ];
         break;
       case 'plan.updated':
-        plan.value = ev.plan;
-        planTotal.value = ev.total;
-        planCurrency.value = ev.currency;
-        planBudget.value = ev.budget;
-        planOverBudget.value = ev.overBudget;
-        // The Budget panel's Estimated is the deterministic plan total.
-        budget.value = { ...budget.value, estimated: ev.total };
+        applyPlan(ev);
         break;
       case 'token':
         if (!streaming.value) {

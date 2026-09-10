@@ -1,6 +1,6 @@
-<!-- Right-column panel of the chat view: trip requirements, research
-     checklist and budget summary. Collapses to a slim toggle strip;
-     on narrow screens it renders inside a slide-over drawer instead. -->
+<!-- Right-column panel of the chat view: trip requirements and trip plan.
+      Collapses to a slim toggle strip;
+      on narrow screens it renders inside a slide-over drawer instead. -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useLocalStorageToggle } from '../../composables/useLocalStorageToggle';
@@ -13,7 +13,6 @@ const travel = useTravelStore();
 
 // Persisted open state per section (shared composable).
 const [reqOpen, toggleReq] = useLocalStorageToggle('state-req-open');
-const [researchOpen, toggleResearch] = useLocalStorageToggle('state-research-open');
 const [planOpen, togglePlan] = useLocalStorageToggle('state-plan-open');
 
 const confirmed = computed(() => travel.requirements.filter((r) => r.value));
@@ -43,18 +42,28 @@ watch(
   { immediate: true }
 );
 
-const researchRows = computed(() => [
-  { label: 'Weather', state: travel.research.weather },
-  { label: 'Transportation', state: travel.research.transportation },
-  { label: 'Accommodation', state: travel.research.accommodation },
-  { label: 'Activities', state: travel.research.activities },
-  { label: 'Rental car', state: travel.research.rentalCar }
-]);
-const researchDone = computed(() => researchRows.value.filter((r) => r.state === 'done').length);
-
 // Money in the plan currency (formatOptionPrice without per-person math).
 const formatMoney = (n: number) =>
   formatOptionPrice({ price: n, currency: travel.planCurrency, per_person: false });
+const travelersCount = computed(() => {
+  const raw = travel.requirements.find((r) => r.key === 'travelers')?.value;
+  const n = raw ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : null;
+});
+// Per-person items show the trip total prominent + the per-person
+// breakdown discreet below; everything else shows its price as-is.
+const lineTotal = (price: number | null, perPerson: boolean, currency: string | null) =>
+  price === null || price === undefined
+    ? '—'
+    : formatOptionPrice({
+        price: perPerson && travelersCount.value ? price * travelersCount.value : price,
+        currency: currency ?? travel.planCurrency,
+        per_person: false,
+      });
+const lineDetail = (price: number | null, perPerson: boolean, currency: string | null) =>
+  perPerson && travelersCount.value && travelersCount.value > 1 && price !== null && price !== undefined
+    ? `${formatOptionPrice({ price, currency: currency ?? travel.planCurrency, per_person: false })} × ${travelersCount.value}`
+    : '';
 const barPct = computed(() => {
   if (!travel.planBudget) return 0;
   return Math.min(100, Math.round((travel.planTotal / travel.planBudget) * 100));
@@ -81,6 +90,7 @@ const iconFor = (category: string) => CATEGORY_ICONS[category] ?? CATEGORY_ICONS
       <button class="sec-toggle" @click="toggleReq()" :aria-expanded="reqOpen">
         <i class="pi pi-chevron-down toggle-ic" :class="{ closed: !reqOpen }" />
         Trip requirements
+        <span class="count">{{ confirmed.length }}/{{ travel.requirements.length }}</span>
       </button>
       <div class="collapse" :class="{ closed: !reqOpen }">
         <div class="clip">
@@ -102,29 +112,10 @@ const iconFor = (category: string) => CATEGORY_ICONS[category] ?? CATEGORY_ICONS
     </section>
 
     <section>
-      <button class="sec-toggle" @click="toggleResearch()" :aria-expanded="researchOpen">
-        <i class="pi pi-chevron-down toggle-ic" :class="{ closed: !researchOpen }" />
-        Research <span class="muted">{{ researchDone }}/{{ researchRows.length }}</span>
-      </button>
-      <div class="collapse" :class="{ closed: !researchOpen }">
-        <div class="clip">
-      <ul class="research">
-        <li v-for="r in researchRows" :key="r.label">
-          <i v-if="r.state === 'done'" class="pi pi-check-circle ok" />
-          <i v-else-if="r.state === 'active'" class="pi pi-spin pi-spinner active" />
-          <i v-else class="pi pi-circle muted" />
-          {{ r.label }}
-        </li>
-      </ul>
-        </div>
-      </div>
-    </section>
-
-    <section>
       <button class="sec-toggle" @click="togglePlan()" :aria-expanded="planOpen">
         <i class="pi pi-chevron-down toggle-ic" :class="{ closed: !planOpen }" />
         Trip plan
-        <span v-if="travel.plan.length" class="muted">{{ formatMoney(travel.planTotal) }}</span>
+        <span v-if="travel.plan.length" class="count">{{ travel.plan.length }}</span>
       </button>
       <div class="collapse" :class="{ closed: !planOpen }">
         <div class="clip">
@@ -136,7 +127,7 @@ const iconFor = (category: string) => CATEGORY_ICONS[category] ?? CATEGORY_ICONS
             <div v-for="item in travel.plan" :key="`${item.category}:${item.option_id}`" class="tl-item">
               <span class="badge" v-html="iconFor(item.category)" />
               <span class="tx"><b>{{ item.label }}</b><small v-if="item.details">{{ item.details }}</small></span>
-              <span class="pr">{{ formatOptionPrice(item) || '—' }}</span>
+              <span class="pr">{{ lineTotal(item.price, item.per_person, item.currency) }}<small v-if="lineDetail(item.price, item.per_person, item.currency)">{{ lineDetail(item.price, item.per_person, item.currency) }}</small></span>
             </div>
           </div>
           <div v-if="travel.plan.length" class="row total">
@@ -194,6 +185,14 @@ const iconFor = (category: string) => CATEGORY_ICONS[category] ?? CATEGORY_ICONS
 }
 .sec-toggle i {
   font-size: 0.65rem;
+}
+.sec-toggle .count {
+  background: var(--p-surface-100);
+  border-radius: 10px;
+  padding: 1px 8px;
+  font-size: 0.7rem;
+  letter-spacing: 0;
+  margin-left: auto;
 }
 /* .toggle-ic rotation + .collapse animation live in main.css (shared). */
 dl {
@@ -256,22 +255,6 @@ dl {
   padding: 3px 10px;
   font-size: 0.8rem;
 }
-/* Research checklist */
-.research {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  font-size: 0.88rem;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.research i {
-  margin-right: 8px;
-}
-.research .active {
-  color: var(--p-primary-500);
-}
 /* Narrow variant inside the small-screen drawer */
 .in-drawer {
   width: auto;
@@ -311,10 +294,25 @@ dl {
   position: relative;
   margin: 4px 0 4px 15px;
   padding-left: 22px;
-  border-left: 2px solid color-mix(in srgb, var(--p-primary-500) 25%, transparent);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+}
+/* Vertical line fading out at both ends instead of cutting abruptly. */
+.tl::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--p-primary-500) 25%, transparent) 5%,
+    color-mix(in srgb, var(--p-primary-500) 25%, transparent) 95%,
+    transparent
+  );
 }
 .tl-item {
   position: relative;
@@ -349,6 +347,7 @@ dl {
 .tx {
   flex: 1;
   min-width: 0;
+  line-height: 1.3;
 }
 .tx b {
   display: block;
@@ -361,6 +360,13 @@ dl {
 .pr {
   font-weight: 700;
   white-space: nowrap;
+  text-align: right;
+}
+.pr small {
+  display: block;
+  font-weight: 400;
+  font-size: 0.72rem;
+  color: var(--p-surface-500);
 }
 .pbar {
   height: 5px;

@@ -67,7 +67,7 @@ function onSave() {
       <div v-if="html" class="prose" v-html="html" @click="onProseClick" />
       <div v-if="autoHtml" class="prose" v-html="autoHtml" @click="onProseClick" />
       <div v-if="!live && hasSaveable" class="save-bar">
-        <span v-if="travel.choicesSaved[message.id]" class="saved-note">Choices saved to your trip plan.</span>
+        <span v-if="travel.choicesSaved[message.id]" class="saved-note"><i class="pi pi-check-circle" /> Choices saved to your trip plan.</span>
         <button v-else class="save-btn" :disabled="draftCount === 0 || travel.loading" @click="onSave">
           Save choices{{ draftCount ? ` (${draftCount})` : '' }}
         </button>
@@ -130,8 +130,20 @@ function onSave() {
   cursor: default;
 }
 .saved-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   font-size: 0.82rem;
-  color: var(--p-green-500);
+  font-weight: 600;
+  color: var(--p-green-700);
+  background: color-mix(in srgb, var(--p-green-500) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--p-green-500) 35%, transparent);
+  border-radius: 99px;
+  padding: 5px 13px;
+}
+.saved-note i {
+  font-size: 0.85rem;
+  line-height: 0;
 }
 .time {
   font-size: 0.7rem;

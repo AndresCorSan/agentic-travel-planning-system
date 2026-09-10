@@ -77,7 +77,7 @@ export type StreamEvent =
   | { type: 'research.update'; key: ResearchKey; state: ResearchState }
   | { type: 'requirements.updated'; requirements: RequirementItem[] }
   | { type: 'options'; category: string; options: PlanOption[] }
-  | { type: 'plan.updated'; plan: PlanItem[]; total: number; currency: string | null; budget: number | null; overBudget: boolean }
+  | { type: 'plan.updated' } & PlanUpdate
   | { type: 'token'; text: string }
   | { type: 'message'; message: ChatMessage }
   | { type: 'done' }
@@ -97,6 +97,15 @@ export interface PlanOption {
 export interface PlanItem extends PlanOption {
   category: string;
   option_id: string;
+}
+
+/** Trip plan + deterministic total payload (plan.updated event / choices response). */
+export interface PlanUpdate {
+  plan: PlanItem[];
+  total: number;
+  currency: string | null;
+  budget: number | null;
+  overBudget: boolean;
 }
 
 /** Categories where a new choice replaces the previous one. */
