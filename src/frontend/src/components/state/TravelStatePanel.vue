@@ -2,7 +2,6 @@
      checklist and budget summary. Collapses to a slim toggle strip;
      on narrow screens it renders inside a slide-over drawer instead. -->
 <script setup lang="ts">
-import ProgressBar from 'primevue/progressbar';
 import { computed, ref, watch } from 'vue';
 import { useLocalStorageToggle } from '../../composables/useLocalStorageToggle';
 import { useTravelStore } from '../../stores/travel';
@@ -16,7 +15,6 @@ const travel = useTravelStore();
 const [reqOpen, toggleReq] = useLocalStorageToggle('state-req-open');
 const [researchOpen, toggleResearch] = useLocalStorageToggle('state-research-open');
 const [planOpen, togglePlan] = useLocalStorageToggle('state-plan-open');
-const [budgetOpen, toggleBudget] = useLocalStorageToggle('state-budget-open');
 
 const confirmed = computed(() => travel.requirements.filter((r) => r.value));
 const missing = computed(() => travel.requirements.filter((r) => !r.value));
@@ -54,11 +52,27 @@ const researchRows = computed(() => [
 ]);
 const researchDone = computed(() => researchRows.value.filter((r) => r.state === 'done').length);
 
-// Flat budget rows (unlike BudgetSummary's card, which suits the chat).
-const pct = computed(() =>
-  travel.budget.budget ? Math.round((travel.budget.estimated / travel.budget.budget) * 100) : 0
-);
-const fmt = (n: number) => `${travel.budget.currency}${n.toLocaleString()}`;
+// Money in the plan currency (formatOptionPrice without per-person math).
+const formatMoney = (n: number) =>
+  formatOptionPrice({ price: n, currency: travel.planCurrency, per_person: false });
+const barPct = computed(() => {
+  if (!travel.planBudget) return 0;
+  return Math.min(100, Math.round((travel.planTotal / travel.planBudget) * 100));
+});
+
+// Category -> inline SVG badge icon (category name stays out of the text:
+// the icon says what it is, the subtitle carries dates/details).
+const CATEGORY_ICONS: Record<string, string> = {
+  transportation:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
+  accommodation:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
+  rental_car:
+    '<svg viewBox="0 -960 960 960" fill="currentColor"><path d="M240-200v40q0 17-11.5 28.5T200-120h-40q-17 0-28.5-11.5T120-160v-320l84-240q6-18 21.5-29t34.5-11h440q19 0 34.5 11t21.5 29l84 240v320q0 17-11.5 28.5T800-120h-40q-17 0-28.5-11.5T720-160v-40H240Zm-8-360h496l-42-120H274l-42 120Zm-32 80v200-200Zm100 160q25 0 42.5-17.5T360-380q0-25-17.5-42.5T300-440q-25 0-42.5 17.5T240-380q0 25 17.5 42.5T300-320Zm360 0q25 0 42.5-17.5T720-380q0-25-17.5-42.5T660-440q-25 0-42.5 17.5T600-380q0 25 17.5 42.5T660-320Zm-460 40h560v-200H200v200Z"/></svg>',
+  activities:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+};
+const iconFor = (category: string) => CATEGORY_ICONS[category] ?? CATEGORY_ICONS.activities;
 </script>
 
 <template>
@@ -110,39 +124,32 @@ const fmt = (n: number) => `${travel.budget.currency}${n.toLocaleString()}`;
       <button class="sec-toggle" @click="togglePlan()" :aria-expanded="planOpen">
         <i class="pi pi-chevron-down toggle-ic" :class="{ closed: !planOpen }" />
         Trip plan
-        <span v-if="travel.plan.length" class="muted">{{ formatOptionPrice({ price: travel.planTotal, currency: travel.planCurrency, per_person: false }) }}</span>
+        <span v-if="travel.plan.length" class="muted">{{ formatMoney(travel.planTotal) }}</span>
       </button>
       <div class="collapse" :class="{ closed: !planOpen }">
         <div class="clip">
-          <p v-if="!travel.plan.length" class="empty">Nothing saved yet — pick options from the chat.</p>
-          <dl v-else>
-            <div v-for="item in travel.plan" :key="`${item.category}:${item.option_id}`" class="req">
-              <dt>{{ item.label }}<span class="muted"> · {{ item.category }}</span></dt>
-              <dd>{{ formatOptionPrice(item) || '—' }}</dd>
+          <div v-if="!travel.plan.length" class="plan-empty">
+            <b>Your trip plan is empty</b>
+            <p>Your picks will land here when you choose options from the chat.</p>
+          </div>
+          <div v-else class="tl">
+            <div v-for="item in travel.plan" :key="`${item.category}:${item.option_id}`" class="tl-item">
+              <span class="badge" v-html="iconFor(item.category)" />
+              <span class="tx"><b>{{ item.label }}</b><small v-if="item.details">{{ item.details }}</small></span>
+              <span class="pr">{{ formatOptionPrice(item) || '—' }}</span>
             </div>
-          </dl>
+          </div>
           <div v-if="travel.plan.length" class="row total">
             <span>Total</span>
-            <strong>{{ formatOptionPrice({ price: travel.planTotal, currency: travel.planCurrency, per_person: false }) || '—' }}</strong>
+            <strong>{{ formatMoney(travel.planTotal) }} <span v-if="travel.planBudget !== null" class="muted">of {{ formatMoney(travel.planBudget) }}</span></strong>
           </div>
-          <p v-if="travel.planOverBudget" class="over">Over budget.</p>
-        </div>
-      </div>
-    </section>
-
-    <section>
-      <button class="sec-toggle" @click="toggleBudget()" :aria-expanded="budgetOpen">
-        <i class="pi pi-chevron-down toggle-ic" :class="{ closed: !budgetOpen }" />
-        Budget
-      </button>
-      <div class="collapse" :class="{ closed: !budgetOpen }">
-        <div class="clip">
-      <div class="budget-rows">
-        <div class="row"><span class="muted">Estimated</span><strong>{{ fmt(travel.budget.estimated) }}</strong></div>
-        <div class="row"><span class="muted">Budget</span><span>{{ travel.budget.budget ? fmt(travel.budget.budget) : '—' }}</span></div>
-        <ProgressBar :value="pct" :show-value="false" class="bar" />
-        <div class="row"><span class="muted">Remaining</span><strong class="ok">{{ fmt((travel.budget.budget ?? 0) - travel.budget.estimated) }}</strong></div>
-      </div>
+          <div v-if="travel.plan.length && travel.planBudget !== null" class="pbar" :class="{ over: travel.planOverBudget }">
+            <i :style="{ width: barPct + '%' }" />
+          </div>
+          <div v-if="travel.plan.length && travel.planBudget !== null" class="row">
+            <span class="muted">{{ travel.planOverBudget ? 'Over by' : 'Remaining' }}</span>
+            <strong :class="travel.planOverBudget ? 'bad' : 'ok'">{{ formatMoney(Math.abs(travel.planBudget - travel.planTotal)) }}</strong>
+          </div>
         </div>
       </div>
     </section>
@@ -265,13 +272,6 @@ dl {
 .research .active {
   color: var(--p-primary-500);
 }
-/* Flat budget rows (.ok highlight + .bar in main.css) */
-.budget-rows .row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.88rem;
-  margin-bottom: 4px;
-}
 /* Narrow variant inside the small-screen drawer */
 .in-drawer {
   width: auto;
@@ -279,19 +279,109 @@ dl {
   padding: 0;
   overflow: visible;
 }
-/* Trip plan section */
-.row.total {
+/* Trip plan empty state: dashed rounded box, no icon */
+.plan-empty {
+  border: 1.5px dashed var(--p-surface-300);
+  border-radius: 10px;
+  padding: 12px 14px;
+  text-align: left;
+}
+.plan-empty b {
+  display: block;
+  font-size: 0.85rem;
+}
+.plan-empty p {
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+  color: var(--p-surface-500);
+}
+.row {
   display: flex;
   justify-content: space-between;
   font-size: 0.88rem;
+  margin-bottom: 4px;
+}
+.row.total {
+  font-weight: 700;
   margin-top: 6px;
-  padding-top: 6px;
+  padding-top: 8px;
   border-top: 1px solid var(--p-surface-200);
 }
-.over {
-  margin: 6px 0 0;
-  font-size: 0.82rem;
+.tl {
+  position: relative;
+  margin: 4px 0 4px 15px;
+  padding-left: 22px;
+  border-left: 2px solid color-mix(in srgb, var(--p-primary-500) 25%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tl-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.88rem;
+}
+.badge {
+  position: absolute;
+  left: -38px;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 9px;
+  background: var(--p-surface-0);
+  border: 2px solid color-mix(in srgb, var(--p-primary-500) 25%, transparent);
+  color: var(--p-primary-600);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.badge svg {
+  width: 16px;
+  height: 16px;
+}
+/* v-html icons have no scoped attributes: pierce them explicitly. */
+.badge :deep(svg) {
+  width: 16px;
+  height: 16px;
+}
+.tx {
+  flex: 1;
+  min-width: 0;
+}
+.tx b {
+  display: block;
+  font-size: 0.85rem;
   font-weight: 600;
+}
+.tx small {
+  color: var(--p-surface-500);
+}
+.pr {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.pbar {
+  height: 5px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--p-primary-500) 20%, transparent);
+  margin: 8px 0;
+  overflow: hidden;
+}
+.pbar i {
+  display: block;
+  height: 100%;
+  background: var(--p-primary-500);
+  border-radius: 99px;
+}
+.pbar.over i {
+  background: var(--p-red-500);
+}
+.ok {
+  color: var(--p-green-600);
+}
+.bad {
   color: var(--p-red-500);
 }
 </style>

@@ -161,10 +161,8 @@ capability to the system.
 ### Phase 6 — Plan & Budget
 
 - [x] Define the structured travel-plan representation
-- [ ] Generate a complete itinerary from the research results
+- [ ] Generate a complete plan from the research results
 - [ ] Add deterministic budget calculation
-- [ ] Add hard-constraint validation
-- [ ] Add trip scoring and plan selection
 
 ### Phase 7 — Critic & Replanning
 
@@ -181,14 +179,16 @@ capability to the system.
 - [x] Expose the LangGraph workflow through a minimal web interface
 - [x] Build the conversational chat interface
 - [x] Support multi-turn conversations and LangGraph interrupts/resume
+- [x] Display subagents responses as complementary info
 - [ ] Support thread-based conversations
 - [x] Display current travel requirements and planning state
-- [ ] Display itinerary and budget information
-- [ ] Display validation, scoring, and research results
+- [x] Let users pick research options in the chat (human-in-the-loop implementation)
+- [x] Display trip plan and budget information
+- [ ] Allow saving the current trip plan to the "Saved plans" library
 
 ### Phase 9 — Persistence & Production Backend
 
-- [ ] Persist users, sessions, requirements, research, and itineraries in MariaDB
+- [ ] Persist users, sessions, requirements, research, and trip plans in MariaDB
 - [ ] Add production-oriented LangGraph checkpointing
 - [x] Expose the planning workflow through FastAPI
 - [ ] Connect the web application to persistent backend data

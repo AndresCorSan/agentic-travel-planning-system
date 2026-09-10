@@ -37,6 +37,7 @@ export const useTravelStore = defineStore('travel', () => {
   const plan = ref<PlanItem[]>([]);
   const planTotal = ref(0);
   const planCurrency = ref<string | null>(null);
+  const planBudget = ref<number | null>(null);
   const planOverBudget = ref(false);
   // Per-message selection drafts for the inline option controls, plus
   // messages already saved (controls locked afterwards).
@@ -147,6 +148,7 @@ export const useTravelStore = defineStore('travel', () => {
         plan.value = [];
         planTotal.value = 0;
         planCurrency.value = null;
+        planBudget.value = null;
         planOverBudget.value = false;
         drafts.value = {};
         choicesSaved.value = {};
@@ -260,6 +262,7 @@ export const useTravelStore = defineStore('travel', () => {
         plan.value = ev.plan;
         planTotal.value = ev.total;
         planCurrency.value = ev.currency;
+        planBudget.value = ev.budget;
         planOverBudget.value = ev.overBudget;
         // The Budget panel's Estimated is the deterministic plan total.
         budget.value = { ...budget.value, estimated: ev.total };
@@ -323,7 +326,7 @@ export const useTravelStore = defineStore('travel', () => {
     }
   }
 
-  return { messages, loading, streamStatus, agentRows, streaming, requirements, research, budget, voted, vote, loadConversation, send, choose, optionsByCategory, optionsById, plan, planTotal, planCurrency, planOverBudget, drafts, choicesSaved, optionsByMessage, toggleOption, draftChoices, saveChoices };
+  return { messages, loading, streamStatus, agentRows, streaming, requirements, research, budget, voted, vote, loadConversation, send, choose, optionsByCategory, optionsById, plan, planTotal, planCurrency, planBudget, planOverBudget, drafts, choicesSaved, optionsByMessage, toggleOption, draftChoices, saveChoices };
 });
 
 export const useLibraryStore = defineStore('library', () => {
