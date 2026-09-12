@@ -161,17 +161,15 @@ capability to the system.
 ### Phase 6 — Plan & Budget
 
 - [x] Define the structured travel-plan representation
-- [ ] Generate a complete plan from the research results
-- [ ] Add deterministic budget calculation
+- [x] Generate a complete plan from the research results
+- [x] Add deterministic budget calculation
 
-### Phase 7 — Critic & Replanning
+### Phase 7 — Critic & Replanning (discarded)
 
-- [ ] Add the Travel Critic Agent
-- [ ] Connect the critic to the generated travel plan
-- [ ] Route valid plans to the final response
-- [ ] Route invalid plans back to the Travel Planner
-- [ ] Implement bounded replanning
-- [ ] Test the planner with conflicting and unsatisfied requirements
+Discarded: an LLM-based critic with a planner → critic → replan loop was
+evaluated and deliberately dropped — the human-in-the-loop design (the
+agent proposes, the user chooses with live prices and totals) already
+covers the failure mode a critic exists for. See [Travel Critic Agent (discarded)](./docs/architecture.md#travel-critic-agent-discarded).
 
 ### Phase 8 — Conversational Web Prototype
 

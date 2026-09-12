@@ -109,21 +109,27 @@ It can:
 The agent uses external capabilities through MCP tools and does not directly
 handle provider-specific integrations.
 
-### Travel Critic Agent
+### Travel Critic Agent (discarded)
 
-Reviews the proposed travel plan before it is presented to the user.
-
-It evaluates:
-
-- User requirements and preferences.
-- Budget and estimated total cost.
-- Dates and trip duration.
-- Transportation feasibility.
-- Consistency of the itinerary.
-- Unsupported or potentially unreliable recommendations.
-
-The critic returns a structured decision indicating whether the plan is valid
-or requires replanning.
+> **Design decision (evaluated, not implemented):** an LLM-based critic with
+> a bounded planner → critic → replan loop was considered and deliberately
+> discarded:
+>
+> - **Latency/cost** — every turn pays at least one extra LLM call (more on
+>   replan), very noticeable in an interactive chat.
+> - **False positives** — the critic can misread a requirement and reject a
+>   valid plan, triggering a "repair" that makes the result worse.
+> - **Unnecessary by design** — the system is human-in-the-loop: the agent
+>   proposes researched options with live prices and totals, and the user
+>   chooses. The failure mode the critic exists for (the agent deciding
+>   badly on its own) does not occur here; validation happens in the UI,
+>   where the user sees totals vs. budget and picks accordingly.
+> - **Low demo value** — the visible output (a "valid" badge) duplicates
+>   what the user already sees in the trip-plan panel.
+>
+> End-to-end testing showed the planner already produces
+> constraint-satisfying plans reliably, so a critic loop adds cost without
+> measurable benefit.
 
 ---
 
