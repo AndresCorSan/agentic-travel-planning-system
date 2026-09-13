@@ -14,6 +14,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useLocalStorageToggle } from '../../composables/useLocalStorageToggle';
 import { useLibraryStore } from '../../stores/travel';
 import { useUiStore } from '../../stores/ui';
+import { formatUpdatedAt } from '../../utils/datetime';
 import AccentPicker from '../chat/AccentPicker.vue';
 import ThemeToggle from '../chat/ThemeToggle.vue';
 
@@ -203,7 +204,7 @@ function askDelete(kind: RowKind, id: string) {
             <i class="pi pi-comments" />
             <span v-if="!isEditing('conv', c.id)" class="row-text">
               <span class="row-title">{{ c.title }}</span>
-              <span class="meta">{{ c.updatedAt }}</span>
+              <span class="meta">{{ formatUpdatedAt(c.updatedAt) }}</span>
             </span>
             <InputText
               v-else
@@ -297,7 +298,7 @@ function askDelete(kind: RowKind, id: string) {
             <button class="pop-row" :class="{ sel: activeTrip === c.id }" @click="openTrip(c.id)">
               <span class="pop-text">
                 <span class="pop-item-title">{{ c.title }}</span>
-                <span class="meta">{{ c.updatedAt }}</span>
+                <span class="meta">{{ formatUpdatedAt(c.updatedAt) }}</span>
               </span>
             </button>
           </li>

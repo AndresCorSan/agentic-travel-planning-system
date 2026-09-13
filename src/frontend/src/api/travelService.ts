@@ -1,5 +1,5 @@
 import { api } from './client';
-import { postStream } from './stream';
+import { AGENT_LABELS, postStream } from './stream';
 import type { StreamEvent } from '../types';
 import {
   conversations,
@@ -14,6 +14,7 @@ import type {
   BudgetSummary,
   ChatMessage,
   Conversation,
+  PlanOption,
   PlanUpdate,
   ResearchStatus,
   RequirementItem,
@@ -59,7 +60,73 @@ export function createPendingUser(text: string): ChatMessage {
 }
 
 export async function listConversations(): Promise<Conversation[]> {
+  if (import.meta.env.VITE_USE_BACKEND === 'true') {
+    try {
+      const { data } = await api.get('/conversations');
+      return (data.conversations ?? []) as Conversation[];
+    } catch {
+      return [];
+    }
+  }
   return [...conversations];
+}
+
+/** Create a conversation (backend persists it; id is client-generated so the
+    sidebar can navigate synchronously). */
+export async function createConversation(id: string, title: string): Promise<void> {
+  if (import.meta.env.VITE_USE_BACKEND !== 'true') return;
+  try {
+    await api.post('/conversations', { id, title });
+  } catch {
+    // Optimistic local row stays; the backend ensures it on first message.
+  }
+}
+
+/** Stored message history for rehydrating the thread after a reload. */
+export async function getConversationMessages(id: string): Promise<ChatMessage[]> {
+  const { data } = await api.get(`/conversations/${id}/messages`);
+  const msgs = (data.messages ?? []) as ChatMessage[];
+  // Server stores id/text only; labels are a frontend mapping.
+  for (const m of msgs) {
+    if (m.subagentResults) {
+      for (const r of m.subagentResults) {
+        if (!r.label) r.label = AGENT_LABELS[r.id] ?? r.id;
+      }
+    }
+  }
+  return msgs;
+}
+
+export interface ConversationState {
+  requirements: RequirementItem[];
+  options: Record<string, PlanOption[]>;
+  plan: PlanUpdate | null;
+}
+
+/** Graph-owned side-panel state (requirements/options/plan) for rehydrate. */
+export async function getConversationState(id: string): Promise<ConversationState | null> {
+  try {
+    const { data } = await api.get(`/conversations/${id}/state`);
+    return data as ConversationState;
+  } catch {
+    return null;
+  }
+}
+
+export async function renameConversationRemote(id: string, title: string): Promise<void> {
+  try {
+    await api.patch(`/conversations/${id}`, { title });
+  } catch {
+    // Optimistic local rename stays.
+  }
+}
+
+export async function deleteConversationRemote(id: string): Promise<void> {
+  try {
+    await api.delete(`/conversations/${id}`);
+  } catch {
+    // Optimistic local delete stays.
+  }
 }
 
 export async function getMessages(ids: string[]): Promise<ChatMessage[]> {

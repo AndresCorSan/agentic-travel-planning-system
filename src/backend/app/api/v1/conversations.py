@@ -11,8 +11,19 @@ from pydantic import BaseModel
 from app.core.dependencies import get_graph
 from app.agents.state import PlanItem, SINGLE_CHOICE_CATEGORIES
 from app.agents.tools.plan import plan_total
+from app.database.database import AsyncSessionLocal
+from app.database import repositories as repo
 
 router = APIRouter()
+
+
+class CreateConversationRequest(BaseModel):
+    title: str = "New trip"
+    id: str | None = None
+
+
+class RenameConversationRequest(BaseModel):
+    title: str
 
 
 class SendMessageRequest(BaseModel):
@@ -235,6 +246,19 @@ def _requirements_to_items(req) -> list[dict]:
 
 async def _stream(graph, conversation_id: str, message: str):
     config = {"configurable": {"thread_id": conversation_id}}
+    # Persist the user turn up-front so history survives mid-stream crashes.
+    try:
+        async with AsyncSessionLocal() as session:
+            conv = await repo.ensure_conversation(session, conversation_id)
+            if conv.title in ("New trip", "Untitled trip") and message.strip():
+                conv.title = message.strip()[:60]
+            await repo.add_message(session, conversation_id, "user", "text", message)
+            await session.commit()
+    except Exception:
+        pass
+    assistant_texts: list[str] = []
+    assistant_cards: list[dict] = []
+    agent_results: dict[str, str] = {}
     try:
         state = await graph.aget_state(config)
         if state.interrupts:
@@ -258,6 +282,7 @@ async def _stream(graph, conversation_id: str, message: str):
                     if tools_ran:
                         content = "\n\n" + content.lstrip("\n")
                         tools_ran = False
+                    assistant_texts.append(content)
                     yield _frame("token", {"text": content})
             elif mode == "updates":
                 if not isinstance(payload, dict):
@@ -276,6 +301,8 @@ async def _stream(graph, conversation_id: str, message: str):
                             yield _frame("status", {"text": status})
                     elif node == "destination_research" and output.get("destination_candidates"):
                         candidates = output["destination_candidates"]
+                        cards = [_candidate_to_card(c, i) for i, c in enumerate(candidates)]
+                        assistant_cards.append({"destinations": cards})
                         yield _frame(
                             "message",
                             {
@@ -284,9 +311,7 @@ async def _stream(graph, conversation_id: str, message: str):
                                     "role": "assistant",
                                     "kind": "destinations",
                                     "text": "Here are my top picks — choose one or tell me what to adjust.",
-                                    "destinations": [
-                                        _candidate_to_card(c, i) for i, c in enumerate(candidates)
-                                    ],
+                                    "destinations": cards,
                                     "createdAt": datetime.now(timezone.utc).isoformat(),
                                 }
                             },
@@ -331,6 +356,7 @@ async def _stream(graph, conversation_id: str, message: str):
                         )
                         result_text = _subagent_result_text(output)
                         if result_text:
+                            agent_results[node] = result_text
                             yield _frame("agent.result", {"id": node, "text": result_text})
         final = await graph.aget_state(config)
         req = (final.values or {}).get("requirements")
@@ -338,8 +364,10 @@ async def _stream(graph, conversation_id: str, message: str):
             yield _frame("requirements.updated", {"requirements": _requirements_to_items(req)})
         if (final.values or {}).get("trip_plan"):
             yield _frame("plan.updated", _plan_payload(final.values or {}))
+        interrupt_texts: list[str] = []
         for interrupt in final.interrupts or []:
             if isinstance(interrupt.value, str) and interrupt.value:
+                interrupt_texts.append(interrupt.value)
                 yield _frame(
                     "message",
                     {
@@ -352,6 +380,35 @@ async def _stream(graph, conversation_id: str, message: str):
                         }
                     },
                 )
+        # Persist the assistant turn (text + destination cards + interrupts).
+        # Subagent outputs ride along as the message payload so the
+        # accordions rehydrate exactly as they streamed.
+        try:
+            async with AsyncSessionLocal() as session:
+                await repo.ensure_conversation(session, conversation_id)
+                results = [{"id": nid, "text": text} for nid, text in agent_results.items()]
+                full_text = "".join(assistant_texts).strip()
+                if full_text:
+                    await repo.add_message(
+                        session, conversation_id, "assistant", "text", full_text,
+                        {"subagentResults": results} if results else None,
+                    )
+                elif results:
+                    await repo.add_message(
+                        session, conversation_id, "assistant", "text", "",
+                        {"subagentResults": results},
+                    )
+                for card in assistant_cards:
+                    await repo.add_message(
+                        session, conversation_id, "assistant", "destinations",
+                        "Here are my top picks — choose one or tell me what to adjust.",
+                        card,
+                    )
+                for text in interrupt_texts:
+                    await repo.add_message(session, conversation_id, "assistant", "text", text)
+                await session.commit()
+        except Exception:
+            pass
         yield "event: done\ndata: {}\n\n"
     except Exception as exc:
         if getattr(exc, "status_code", None) == 429 or "429" in str(exc):
@@ -432,3 +489,104 @@ async def send_message(conversation_id: str, body: SendMessageRequest, graph=Dep
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache"},
     )
+
+
+def _conv_to_dict(conv) -> dict:
+    updated = conv.updated_at
+    if updated is not None and updated.tzinfo is None:
+        updated = updated.replace(tzinfo=timezone.utc)
+    return {
+        "id": conv.id,
+        "title": conv.title,
+        "updatedAt": updated.isoformat() if updated else None,
+        "messageIds": [],
+    }
+
+
+def _stored_to_chat(msg) -> dict:
+    created = msg.created_at
+    if created is not None and created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    out = {
+        "id": f"srv-{msg.id}",
+        "role": msg.role,
+        "kind": msg.kind or "text",
+        "text": msg.text or "",
+        "createdAt": created.isoformat() if created else None,
+    }
+    if isinstance(msg.payload, dict) and "destinations" in msg.payload:
+        out["destinations"] = msg.payload["destinations"]
+    if isinstance(msg.payload, dict) and msg.payload.get("subagentResults"):
+        out["subagentResults"] = [
+            {"id": r.get("id", ""), "label": "", "text": r.get("text", "")}
+            for r in msg.payload["subagentResults"]
+            if isinstance(r, dict)
+        ]
+    return out
+
+
+@router.get("/conversations")
+async def list_conversations():
+    async with AsyncSessionLocal() as session:
+        convs = await repo.list_conversations(session)
+        return {"conversations": [_conv_to_dict(c) for c in convs]}
+
+
+@router.post("/conversations")
+async def create_conversation(body: CreateConversationRequest):
+    conversation_id = body.id.strip() if body.id and body.id.strip() else f"trip-{uuid.uuid4().hex[:8]}"
+    async with AsyncSessionLocal() as session:
+        conv = await repo.ensure_conversation(session, conversation_id, body.title or "New trip")
+        await session.commit()
+        return _conv_to_dict(conv)
+
+
+@router.get("/conversations/{conversation_id}/messages")
+async def get_conversation_messages(conversation_id: str):
+    async with AsyncSessionLocal() as session:
+        msgs = await repo.get_messages(session, conversation_id)
+        return {"messages": [_stored_to_chat(m) for m in msgs]}
+
+
+@router.get("/conversations/{conversation_id}/state")
+async def get_conversation_state(conversation_id: str, graph=Depends(get_graph)):
+    """Rehydrate side panels (requirements/options/plan) after a reload."""
+    if graph is None:
+        raise HTTPException(status_code=503, detail="Graph not initialized")
+    state = await graph.aget_state({"configurable": {"thread_id": conversation_id}})
+    values = state.values or {}
+    options = {}
+    for category, opts in (values.get("available_options") or {}).items():
+        options[category] = [_option_to_dict(o) for o in (opts or [])]
+    return {
+        "requirements": _requirements_to_items(values.get("requirements")),
+        "options": options,
+        "plan": _plan_payload(values) if values.get("trip_plan") else None,
+    }
+
+
+@router.patch("/conversations/{conversation_id}")
+async def rename_conversation(conversation_id: str, body: RenameConversationRequest):
+    async with AsyncSessionLocal() as session:
+        conv = await repo.rename_conversation(session, conversation_id, body.title.strip() or "Untitled trip")
+        if conv is None:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        await session.commit()
+        return _conv_to_dict(conv)
+
+
+@router.delete("/conversations/{conversation_id}")
+async def delete_conversation(conversation_id: str, graph=Depends(get_graph)):
+    async with AsyncSessionLocal() as session:
+        ok = await repo.delete_conversation(session, conversation_id)
+        await session.commit()
+    if not ok:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    if graph is not None:
+        try:
+            checkpointer = getattr(graph, "checkpointer", None)
+            if checkpointer is not None and hasattr(checkpointer, "adelete_thread"):
+                await checkpointer.adelete_thread(conversation_id)
+        except Exception:
+            pass
+    return {"deleted": conversation_id}

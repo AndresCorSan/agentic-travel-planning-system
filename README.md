@@ -186,10 +186,10 @@ covers the failure mode a critic exists for. See [Travel Critic Agent (discarded
 
 ### Phase 9 — Persistence & Production Backend
 
-- [ ] Persist users, sessions, requirements, research, and trip plans in MariaDB
-- [ ] Add production-oriented LangGraph checkpointing
+- [x] Persist sessions, requirements, research, and trip plans in SQLite
+- [x] Add production-oriented LangGraph checkpointing
 - [x] Expose the planning workflow through FastAPI
-- [ ] Connect the web application to persistent backend data
+- [x] Connect the web application to persistent backend data
 
 ### Phase 10 — Observability, Evaluation & Release
 

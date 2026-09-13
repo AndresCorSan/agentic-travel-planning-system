@@ -41,3 +41,11 @@ dist/
 *.tmp
 *.temp
 .cache/
+
+# =========================
+# Local databases (phase 9 SQLite persistence)
+# =========================
+*.db
+*.db-wal
+*.db-shm
+*.db-journal

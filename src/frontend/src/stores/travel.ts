@@ -151,25 +151,45 @@ export const useTravelStore = defineStore('travel', () => {
   async function loadConversation(id: string, ids: string[]) {
     conversationId.value = id;
     loading.value = true;
+    // Blank slate in both modes; backend rehydrate fills it below.
+    messageIds.value = [];
+    requirements.value = service.emptyRequirements();
+    research.value = service.emptyResearch();
+    budget.value = service.emptyBudget();
+    optionsByCategory.value = {};
+    plan.value = [];
+    planTotal.value = 0;
+    planCurrency.value = null;
+    planBudget.value = null;
+    planOverBudget.value = false;
+    drafts.value = {};
+    choicesSaved.value = {};
+    optionsByMessage.value = {};
+    agentRows.value = [];
+    streaming.value = null;
+    streamStatus.value = '';
     try {
       if (BACKEND_MODE) {
-        // The backend owns thread state: start blank, stream events fill in.
-        messageIds.value = [];
-        requirements.value = service.emptyRequirements();
-        research.value = service.emptyResearch();
-        budget.value = service.emptyBudget();
-        optionsByCategory.value = {};
-        plan.value = [];
-        planTotal.value = 0;
-        planCurrency.value = null;
-        planBudget.value = null;
-        planOverBudget.value = false;
-        drafts.value = {};
-        choicesSaved.value = {};
-        optionsByMessage.value = {};
-        agentRows.value = [];
-        streaming.value = null;
-        streamStatus.value = '';
+        // Rehydrate persisted history + graph-owned panel state so a
+        // reload (or backend restart) restores the thread.
+        const [msgs, state] = await Promise.all([
+          service.getConversationMessages(id).catch(() => []),
+          service.getConversationState(id),
+        ]);
+        for (const m of msgs) cache.value[m.id] = m;
+        messageIds.value = msgs.map((m) => m.id);
+        // Past subagent outputs imply their research already ran.
+        for (const m of msgs) {
+          for (const r of m.subagentResults ?? []) {
+            const key = AGENT_RESEARCH_KEY[r.id];
+            if (key) research.value[key] = 'done';
+          }
+        }
+        if (state) {
+          if (state.requirements?.length) requirements.value = state.requirements;
+          if (state.options) optionsByCategory.value = state.options;
+          if (state.plan) applyPlan(state.plan);
+        }
         return;
       }
       const msgs = await service.getMessages(ids);
@@ -213,6 +233,17 @@ export const useTravelStore = defineStore('travel', () => {
         for await (const ev of service.streamMessage(conversationId.value, text)) applyEvent(ev);
         streaming.value = null;
         keepPending = true;
+        // Keep the sidebar row fresh (backend auto-titles on first message).
+        if (BACKEND_MODE) {
+          const library = useLibraryStore();
+          const row = library.conversations.find((c) => c.id === conversationId.value);
+          if (row) {
+            row.updatedAt = 'just now';
+            if ((row.title === 'New trip' || row.title === 'Untitled trip') && text.trim()) {
+              row.title = text.trim().slice(0, 60);
+            }
+          }
+        }
       } else {
         const res = await service.sendMessage(conversationId.value, text);
         messageIds.value = messageIds.value.filter((id) => id !== pending.id);
@@ -338,6 +369,7 @@ export const useTravelStore = defineStore('travel', () => {
 });
 
 export const useLibraryStore = defineStore('library', () => {
+  const BACKEND_MODE = import.meta.env.VITE_USE_BACKEND === 'true';
   const conversations = ref<Conversation[]>([]);
   const plans = ref<SavedPlan[]>([]);
 
@@ -348,9 +380,11 @@ export const useLibraryStore = defineStore('library', () => {
   function renameConversation(id: string, title: string) {
     const c = conversations.value.find((c) => c.id === id);
     if (c) c.title = title;
+    if (BACKEND_MODE) void service.renameConversationRemote(id, title);
   }
   function deleteConversation(id: string) {
     conversations.value = conversations.value.filter((c) => c.id !== id);
+    if (BACKEND_MODE) void service.deleteConversationRemote(id);
   }
   function renamePlan(id: string, title: string) {
     const p = plans.value.find((p) => p.id === id);
@@ -361,12 +395,13 @@ export const useLibraryStore = defineStore('library', () => {
   }
   function addConversation(title: string): Conversation {
     const c: Conversation = {
-      id: `trip-${Date.now()}`,
+      id: `trip-${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`,
       title,
       updatedAt: 'just now',
       messageIds: []
     };
     conversations.value.unshift(c);
+    if (BACKEND_MODE) void service.createConversation(c.id, title);
     return c;
   }
 

@@ -258,21 +258,24 @@ implemented directly as application tools.**
 
 ## 9. Persistence
 
-**MariaDB** will store application data such as:
+**SQLite** stores application data such as:
 
-- Users
-- Travel sessions
-- Travel requirements
-- Research results
-- Evidence
-- Itineraries
+- Travel sessions (conversations)
+- Message history
+- Travel requirements (via graph checkpoints)
+- Research results (via graph checkpoints)
+- Itineraries (trip plan snapshots)
 
-**LangGraph checkpointing** will be used to persist graph execution state,
-allowing conversations and travel-planning workflows to continue across
-interactions.
+**LangGraph checkpointing** (`AsyncSqliteSaver`, `checkpoints.db`) persists
+graph execution state, allowing conversations and travel-planning workflows
+to continue across interactions **and backend restarts**
+(`thread_id = conversation_id`).
 
-Application data and LangGraph execution state will be treated as separate
-concerns.
+Application data (`app.db`: `conversations`, `messages`) and LangGraph
+execution state (`checkpoints.db`) are separate concerns — and separate
+files. Both go through a single `DATABASE_URL`-style configuration
+(`DATABASE_URL` / `CHECKPOINT_DB_URL`) so a future move to Postgres is a
+config change, not a code change.
 
 ---
 
@@ -378,9 +381,10 @@ Key metrics:
 - Use the prototype as the main environment for end-to-end testing.
 
 ### Phase 9 — Persistence & Production Backend
-- Add MariaDB persistence.
-- Integrate production-oriented LangGraph checkpointing.
-- Persist users, sessions, requirements, research, and itineraries.
+- Add SQLite persistence (`app.db` + `checkpoints.db`, SQLAlchemy).
+- Integrate persistent LangGraph checkpointing (`AsyncSqliteSaver`).
+- Persist conversations, message history, requirements, research, and itineraries.
+- Conversation list + thread rehydration in the web app.
 - Build the production FastAPI backend.
 - Connect the web application to persistent data.
 
