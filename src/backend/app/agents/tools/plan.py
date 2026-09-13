@@ -96,19 +96,15 @@ def present_options(runtime: ToolRuntime, category: str, options) -> Command:
                 details=str(opt.get("details") or "").strip(),
             )
         )
-    current = dict(runtime.state.get("available_options") or {})
-    current[category] = canon
+    # Return only this category: the state reducer merges it with the
+    # other categories, so parallel calls (one per category per turn)
+    # never overwrite each other.
     return Command(
         update={
-            "available_options": current,
+            "available_options": {category: canon},
             "messages": [
                 ToolMessage(
-                    content=(
-                        f"Published {len(canon)} options for {category}. "
-                        "The options prose is already visible to the user — "
-                        "do NOT list the options again; reply with at most "
-                        "one short line."
-                    ),
+                    content=f"Published {len(canon)} options for {category}.",
                     tool_call_id=runtime.tool_call_id,
                 )
             ],

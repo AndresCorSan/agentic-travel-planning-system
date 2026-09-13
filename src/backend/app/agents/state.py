@@ -99,6 +99,22 @@ class PlanItem(BaseModel):
 # which accumulates). Must stay in sync with the main_llm prompt.
 SINGLE_CHOICE_CATEGORIES = ("transportation", "accommodation", "rental_car")
 
+
+def _merge_options(
+    left: dict | None, right: dict | None
+) -> dict[str, list["PlanOption"]]:
+    """Merge per-category option dicts.
+
+    main_llm calls present_options once per category in the same turn, so
+    several parallel tool writes land on this channel in one step. A plain
+    LastValue channel rejects that (InvalidUpdateError); merging by
+    category key lets each call contribute its own category.
+    """
+    merged = dict(left or {})
+    if right:
+        merged.update(right)
+    return merged
+
 class TravelState(TypedDict):
     messages: Annotated[list, add_messages]
     requirements: TravelRequirements | None
@@ -116,5 +132,5 @@ class TravelState(TypedDict):
     rental_car_results: Annotated[list, add]
 
     # Selectable options per category + the user's saved trip plan
-    available_options: dict[str, list[PlanOption]]
+    available_options: Annotated[dict, _merge_options]
     trip_plan: list[PlanItem]
