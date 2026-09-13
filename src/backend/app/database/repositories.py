@@ -4,7 +4,7 @@ from __future__ import annotations
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import Conversation, Message
+from app.database.models import Conversation, Message, SavedPlan
 
 
 async def ensure_conversation(session: AsyncSession, conversation_id: str, title: str = "New trip") -> Conversation:
@@ -55,3 +55,32 @@ async def delete_conversation(session: AsyncSession, conversation_id: str) -> bo
     await session.execute(delete(Message).where(Message.conversation_id == conversation_id))
     res = await session.execute(delete(Conversation).where(Conversation.id == conversation_id))
     return bool(res.rowcount)
+
+
+async def create_saved_plan(
+    session: AsyncSession,
+    conversation_id: str,
+    title: str,
+    description: str,
+    requirements: list | None,
+    plan: dict | None,
+) -> SavedPlan:
+    row = SavedPlan(
+        conversation_id=conversation_id,
+        title=title,
+        description=description,
+        requirements=requirements,
+        plan=plan,
+    )
+    session.add(row)
+    await session.flush()
+    return row
+
+
+async def list_saved_plans(session: AsyncSession) -> list[SavedPlan]:
+    res = await session.execute(select(SavedPlan).order_by(SavedPlan.created_at.desc()))
+    return list(res.scalars().all())
+
+
+async def get_saved_plan(session: AsyncSession, plan_id: int) -> SavedPlan | None:
+    return await session.get(SavedPlan, plan_id)

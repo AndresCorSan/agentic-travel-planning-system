@@ -78,11 +78,19 @@ function openTrip(id: string) {
   void router.push(`/trip/${id}`);
 }
 function openPlan(id: string) {
+  if (navLocked.value) {
+    notifyLocked();
+    return;
+  }
   ui.navOpen = false;
   planPop.value?.hide();
   void router.push(`/plans/${id}`);
 }
 function openPlans() {
+  if (navLocked.value) {
+    notifyLocked();
+    return;
+  }
   planPop.value?.hide();
   void router.push('/plans');
 }
@@ -269,7 +277,8 @@ function askDelete(kind: RowKind, id: string) {
         <li v-for="p in library.plans" :key="p.id">
           <div
             class="row"
-            :title="p.title"
+            :class="{ locked: navLocked }"
+            :title="navLocked ? LOCKED_MSG : p.title"
             tabindex="0"
             role="button"
             @click="openPlan(p.id)"
@@ -345,7 +354,7 @@ function askDelete(kind: RowKind, id: string) {
         <p class="pop-title">Saved plans</p>
         <ul class="pop-list">
           <li v-for="p in library.plans" :key="p.id">
-            <button class="pop-row" @click="openPlan(p.id)">
+            <button class="pop-row" :class="{ locked: navLocked }" :title="navLocked ? LOCKED_MSG : p.title" @click="openPlan(p.id)">
               <span class="pop-text">
                 <span class="pop-item-title">{{ p.destination }} · {{ p.dates }}</span>
                 <span class="meta">{{ p.status }}</span>
@@ -353,7 +362,7 @@ function askDelete(kind: RowKind, id: string) {
             </button>
           </li>
         </ul>
-        <button class="pop-footer" @click="openPlans()">View all plans <i class="pi pi-arrow-right" /></button>
+        <button class="pop-footer" :class="{ locked: navLocked }" :title="navLocked ? LOCKED_MSG : undefined" @click="openPlans()">View all plans <i class="pi pi-arrow-right" /></button>
       </Popover>
     </div>
 
@@ -582,7 +591,8 @@ ul {
 }
 /* .pop-row.sel selected tint lives in main.css (shared). */
 /* Locked (mid-reply) popover rows: not clickable, no dimming. */
-.pop-row.locked {
+.pop-row.locked,
+.pop-footer.locked {
   cursor: not-allowed;
 }
 .pop-text {

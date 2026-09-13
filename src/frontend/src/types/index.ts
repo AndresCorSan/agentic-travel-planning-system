@@ -144,4 +144,14 @@ export interface SavedPlan {
   destination: string;
   dates: string;
   status: string;
+  /** Backend snapshot (phase 8): present on rows from GET /plans. */
+  description?: string;
+  conversationId?: string;
+  requirements?: RequirementItem[];
+  plan?: PlanItem[];
+  total?: number;
+  currency?: string | null;
+  budget?: number | null;
+  overBudget?: boolean;
+  createdAt?: string | null;
 }

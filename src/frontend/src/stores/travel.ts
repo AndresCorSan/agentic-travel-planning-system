@@ -386,6 +386,9 @@ export const useLibraryStore = defineStore('library', () => {
     conversations.value = conversations.value.filter((c) => c.id !== id);
     if (BACKEND_MODE) void service.deleteConversationRemote(id);
   }
+  function addPlan(plan: SavedPlan) {
+    if (!plans.value.some((p) => p.id === plan.id)) plans.value.unshift(plan);
+  }
   function renamePlan(id: string, title: string) {
     const p = plans.value.find((p) => p.id === id);
     if (p) p.title = title;
@@ -405,5 +408,5 @@ export const useLibraryStore = defineStore('library', () => {
     return c;
   }
 
-  return { conversations, plans, load, renameConversation, deleteConversation, renamePlan, deletePlan, addConversation };
+  return { conversations, plans, load, renameConversation, deleteConversation, renamePlan, deletePlan, addConversation, addPlan };
 });

@@ -134,7 +134,33 @@ export async function getMessages(ids: string[]): Promise<ChatMessage[]> {
 }
 
 export async function listSavedPlans(): Promise<SavedPlan[]> {
+  if (import.meta.env.VITE_USE_BACKEND === 'true') {
+    try {
+      const { data } = await api.get('/plans');
+      return (data.plans ?? []) as SavedPlan[];
+    } catch {
+      return [];
+    }
+  }
   return [...savedPlans];
+}
+
+export async function getSavedPlan(id: string): Promise<SavedPlan | null> {
+  if (import.meta.env.VITE_USE_BACKEND === 'true') {
+    try {
+      const { data } = await api.get(`/plans/${id}`);
+      return data as SavedPlan;
+    } catch {
+      return null;
+    }
+  }
+  return savedPlans.find((p) => p.id === id) ?? null;
+}
+
+/** Snapshot the conversation (requirements + trip plan + budget) as a new saved plan. */
+export async function savePlan(conversationId: string, title?: string): Promise<SavedPlan> {
+  const { data } = await api.post(`/conversations/${conversationId}/plans`, { title: title ?? null });
+  return data as SavedPlan;
 }
 
 export interface MockSendResult {

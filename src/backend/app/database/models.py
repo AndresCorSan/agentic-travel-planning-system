@@ -40,3 +40,22 @@ class Message(Base):
     text: Mapped[str] = mapped_column(Text, default="")
     payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class SavedPlan(Base):
+    """Snapshot of a conversation (phase 8): requirements + trip plan + budget.
+
+    One row per save — if the user keeps chatting and saves again it is a
+    new row, a photo of that moment, never an update of a previous one."""
+
+    __tablename__ = "saved_plans"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    conversation_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("conversations.id", ondelete="CASCADE"), index=True
+    )
+    title: Mapped[str] = mapped_column(String(200), default="Saved trip")
+    description: Mapped[str] = mapped_column(Text, default="")
+    requirements: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    plan: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

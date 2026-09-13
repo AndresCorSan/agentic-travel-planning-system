@@ -4,11 +4,12 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.types import Command
 from pydantic import BaseModel
 
 from app.core.dependencies import get_graph
+from app.agents.llm import light_llm
 from app.agents.state import PlanItem, SINGLE_CHOICE_CATEGORIES
 from app.agents.tools.plan import plan_total
 from app.database.database import AsyncSessionLocal
@@ -37,6 +38,10 @@ class ChoiceItem(BaseModel):
 
 class SaveChoicesRequest(BaseModel):
     choices: list[ChoiceItem]
+
+
+class SavePlanRequest(BaseModel):
+    title: str | None = None
 
 
 STATUS_BY_ROUTE = {
@@ -288,6 +293,25 @@ async def _stream(graph, conversation_id: str, message: str):
                 if not isinstance(payload, dict):
                     continue
                 for node, output in payload.items():
+                    if isinstance(output, list):
+                        # Parallel tool calls (e.g. one present_options per
+                        # category) stream as one update dict per call, not
+                        # a single dict: merge them so every category still
+                        # emits its event below.
+                        merged: dict = {}
+                        for item in output:
+                            if not isinstance(item, dict):
+                                continue
+                            for k, v in item.items():
+                                if (
+                                    k == "available_options"
+                                    and isinstance(v, dict)
+                                    and isinstance(merged.get(k), dict)
+                                ):
+                                    merged[k] = {**merged[k], **v}
+                                elif k not in merged:
+                                    merged[k] = v
+                        output = merged
                     if not isinstance(output, dict):
                         continue
                     if node == "extract_requirements" and output.get("requirements") is not None:
@@ -590,3 +614,115 @@ async def delete_conversation(conversation_id: str, graph=Depends(get_graph)):
         except Exception:
             pass
     return {"deleted": conversation_id}
+
+
+PLAN_DESCRIPTION_PROMPT = """
+You write the opening paragraph of a saved trip plan, shown above the requirements and trip plan details.
+Write one short paragraph of 3-5 sentences with an evocative travel-guide tone: the feel of the destination
+at that time of year and the thread of this particular trip (what kind of experience it will be, drawn from
+the interests and the saved picks).
+
+Rules: do NOT repeat the requirements or list the plan items one by one — that information is already
+visible below. Never mention prices, totals or budget. Never invent places, dates or activities beyond
+the input; stay general when unsure ("riverside evenings", "day trips nearby") rather than naming
+specifics not given. Plain prose only: no markdown, no bullets, no headings.
+Reply in the same language as the requirements and plan labels.""".strip()
+
+
+def _fallback_description(requirements: list[dict], payload: dict) -> str:
+    by_key = {r.get("key"): r.get("value") for r in requirements if isinstance(r, dict)}
+    dest = by_key.get("destination") or "your destination"
+    dates = by_key.get("dates")
+    travelers = by_key.get("travelers")
+    n = len(payload.get("plan") or [])
+    bits = f"Trip to {dest}"
+    if dates:
+        bits += f" ({dates})"
+    if travelers:
+        bits += f" for {travelers}"
+    return f"{bits} with {n} saved choice(s). Details, totals and budget are listed below."
+
+
+async def _describe_plan(requirements: list[dict], payload: dict) -> str:
+    """Standalone light_llm call (not the graph): the input is just the snapshot."""
+    confirmed = [f"{r.get('label')}: {r.get('value')}" for r in requirements if isinstance(r, dict) and r.get("value")]
+    picks = [f"{i.get('category')}: {i.get('label')}" for i in (payload.get("plan") or []) if isinstance(i, dict)]
+    summary = "Requirements:\n" + ("\n".join(f"- {c}" for c in confirmed) or "- (none)") + "\n"
+    summary += "Plan:\n" + ("\n".join(f"- {p}" for p in picks) or "- (empty)")
+    try:
+        msg = await light_llm.ainvoke([
+            SystemMessage(content=PLAN_DESCRIPTION_PROMPT),
+            HumanMessage(content=summary),
+        ])
+        text = (getattr(msg, "content", "") or "").strip()
+        return text or _fallback_description(requirements, payload)
+    except Exception:
+        return _fallback_description(requirements, payload)
+
+
+def _saved_plan_to_dict(row) -> dict:
+    created = row.created_at
+    if created is not None and created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    payload = dict(row.plan or {})
+    return {
+        "id": str(row.id),
+        "title": row.title,
+        "description": row.description or "",
+        "conversationId": row.conversation_id,
+        "requirements": row.requirements or [],
+        "plan": payload.get("plan") or [],
+        "total": payload.get("total", 0),
+        "currency": payload.get("currency"),
+        "budget": payload.get("budget"),
+        "overBudget": bool(payload.get("overBudget", False)),
+        "createdAt": created.isoformat() if created else None,
+        # Card subtitle: prefer the saved Dates requirement, else creation date.
+        "destination": next(
+            (r.get("value") for r in (row.requirements or []) if isinstance(r, dict) and r.get("key") == "destination" and r.get("value")),
+            "",
+        ),
+        "dates": next(
+            (r.get("value") for r in (row.requirements or []) if isinstance(r, dict) and r.get("key") == "dates" and r.get("value")),
+            "",
+        ),
+    }
+
+
+@router.post("/conversations/{conversation_id}/plans")
+async def save_plan(conversation_id: str, body: SavePlanRequest, graph=Depends(get_graph)):
+    """Snapshot destination + requirements + trip plan + budget as a new saved plan."""
+    if graph is None:
+        raise HTTPException(status_code=503, detail="Graph not initialized")
+    state = await graph.aget_state({"configurable": {"thread_id": conversation_id}})
+    values = state.values or {}
+    requirements = _requirements_to_items(values.get("requirements"))
+    payload = _plan_payload(values)
+    destination = next((r["value"] for r in requirements if r["key"] == "destination" and r["value"]), None)
+    if not destination:
+        raise HTTPException(status_code=422, detail="Set a destination before saving a plan")
+    if not payload["plan"]:
+        raise HTTPException(status_code=422, detail="Pick at least one option before saving a plan")
+    title = (body.title or "").strip() or f"{destination} trip"
+    description = await _describe_plan(requirements, payload)
+    async with AsyncSessionLocal() as session:
+        await repo.ensure_conversation(session, conversation_id)
+        row = await repo.create_saved_plan(session, conversation_id, title, description, requirements, payload)
+        await session.commit()
+        return _saved_plan_to_dict(row)
+
+
+@router.get("/plans")
+async def list_plans():
+    async with AsyncSessionLocal() as session:
+        rows = await repo.list_saved_plans(session)
+        return {"plans": [_saved_plan_to_dict(r) for r in rows]}
+
+
+@router.get("/plans/{plan_id}")
+async def get_plan(plan_id: int):
+    async with AsyncSessionLocal() as session:
+        row = await repo.get_saved_plan(session, plan_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Plan not found")
+        return _saved_plan_to_dict(row)

@@ -11,6 +11,10 @@ const router = useRouter();
 onMounted(() => {
   if (!library.plans.length) void library.load();
 });
+
+function subtitle(p: { destination: string; dates: string }): string {
+  return [p.destination, p.dates].filter(Boolean).join(' · ') || 'Saved trip';
+}
 </script>
 
 <template>
@@ -18,17 +22,19 @@ onMounted(() => {
     <div class="plans-head">
       <div>
         <h1>Saved plans</h1>
-        <p class="muted">Locked-in itineraries, ready to revisit or refine.</p>
+        <p class="muted">Snapshots of your conversations, ready to revisit.</p>
       </div>
       <Button label="New trip" icon="pi pi-plus" @click="router.push('/trip/lisbon-trip')" />
     </div>
-    <div class="grid">
+    <div v-if="!library.plans.length" class="empty">
+      <b>No saved plans yet</b>
+      <p>Open a conversation, pick some options and press “Save plan”.</p>
+    </div>
+    <div v-else class="grid">
       <RouterLink v-for="p in library.plans" :key="p.id" :to="`/plans/${p.id}`" class="plan-card">
-        <div class="plan-top">
-          <strong>{{ p.title }}</strong>
-          <span class="status">{{ p.status }}</span>
-        </div>
-        <p class="meta">{{ p.destination }} · {{ p.dates }}</p>
+        <strong>{{ p.title }}</strong>
+        <p class="meta">{{ subtitle(p) }}</p>
+        <p v-if="p.description" class="desc">{{ p.description }}</p>
       </RouterLink>
     </div>
   </div>
@@ -69,22 +75,33 @@ h1 {
   padding: 14px 16px;
   background: var(--p-surface-50);
   color: inherit;
+  display: block;
 }
 .plan-card:hover {
   border-color: var(--p-primary-400);
   text-decoration: none;
 }
-.plan-top {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  align-items: baseline;
+.meta {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  color: var(--p-surface-500);
 }
-.status {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--p-primary-600);
-  white-space: nowrap;
+.desc {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.empty {
+  border: 1.5px dashed var(--p-surface-300);
+  border-radius: 10px;
+  padding: 20px;
+}
+.empty p {
+  margin: 4px 0 0;
+  color: var(--p-surface-500);
+  font-size: 0.88rem;
 }
 </style>
