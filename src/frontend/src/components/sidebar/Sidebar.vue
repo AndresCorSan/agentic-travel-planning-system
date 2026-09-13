@@ -12,7 +12,7 @@ import { useToast } from 'primevue/usetoast';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useLocalStorageToggle } from '../../composables/useLocalStorageToggle';
-import { useLibraryStore } from '../../stores/travel';
+import { useLibraryStore, useTravelStore } from '../../stores/travel';
 import { useUiStore } from '../../stores/ui';
 import { formatUpdatedAt } from '../../utils/datetime';
 import AccentPicker from '../chat/AccentPicker.vue';
@@ -21,6 +21,7 @@ import ThemeToggle from '../chat/ThemeToggle.vue';
 const props = defineProps<{ overlay?: boolean }>();
 
 const library = useLibraryStore();
+const travel = useTravelStore();
 const ui = useUiStore();
 const route = useRoute();
 const router = useRouter();
@@ -40,13 +41,38 @@ onMounted(() => {
 
 const activeTrip = computed(() => (route.name === 'trip' ? String(route.params.id) : null));
 const onPlansRoute = computed(() => String(route.name ?? '').startsWith('plan'));
+// Trip switching locks mid-reply (router guard covers direct URL nav).
+const navLocked = computed(() => travel.loading);
+// Show tooltip on the New trip button when locked
+const LOCKED_MSG = 'Reply in progress — wait for the current reply to finish.';
+// Locked message first; otherwise the collapsed rail keeps its "New trip" hint.
+const newTripTip = computed(() =>
+  navLocked.value ? LOCKED_MSG : collapsed.value ? 'New trip' : undefined
+);
+
+function notifyLocked() {
+  toast.add({
+    severity: 'info',
+    summary: 'Reply in progress',
+    detail: 'Wait for the current reply to finish before switching trips.',
+    life: 2500
+  });
+}
 
 function newTrip() {
+  if (navLocked.value) {
+    notifyLocked();
+    return;
+  }
   const c = library.addConversation('Untitled trip');
   ui.navOpen = false;
   void router.push(`/trip/${c.id}`);
 }
 function openTrip(id: string) {
+  if (navLocked.value && id !== activeTrip.value) {
+    notifyLocked();
+    return;
+  }
   ui.navOpen = false;
   convPop.value?.hide();
   void router.push(`/trip/${id}`);
@@ -179,7 +205,7 @@ function askDelete(kind: RowKind, id: string) {
     </div>
 
     <div class="action">
-      <Button icon="pi pi-plus" :label="collapsed ? undefined : 'New trip'" class="new-btn" @click="newTrip()" v-tooltip="collapsed ? 'New trip' : undefined" />
+      <Button icon="pi pi-plus" :label="collapsed ? undefined : 'New trip'" class="new-btn" @click="newTrip()" v-tooltip="newTripTip" />
     </div>
 
     <nav v-if="!collapsed" class="groups">
@@ -194,8 +220,8 @@ function askDelete(kind: RowKind, id: string) {
         <li v-for="c in library.conversations" :key="c.id">
           <div
             class="row"
-            :class="{ active: activeTrip === c.id }"
-            :title="c.title"
+            :class="{ active: activeTrip === c.id, locked: navLocked && activeTrip !== c.id }"
+            :title="navLocked && activeTrip !== c.id ? LOCKED_MSG : c.title"
             tabindex="0"
             role="button"
             @click="openTrip(c.id)"
@@ -295,7 +321,7 @@ function askDelete(kind: RowKind, id: string) {
         <p class="pop-title">Recent conversations</p>
         <ul class="pop-list">
           <li v-for="c in library.conversations" :key="c.id">
-            <button class="pop-row" :class="{ sel: activeTrip === c.id }" @click="openTrip(c.id)">
+            <button class="pop-row" :class="{ sel: activeTrip === c.id, locked: navLocked && activeTrip !== c.id }" :title="navLocked && activeTrip !== c.id ? LOCKED_MSG : c.title" @click="openTrip(c.id)">
               <span class="pop-text">
                 <span class="pop-item-title">{{ c.title }}</span>
                 <span class="meta">{{ formatUpdatedAt(c.updatedAt) }}</span>
@@ -468,6 +494,11 @@ ul {
   background: var(--p-primary-50);
   color: var(--p-primary-700);
 }
+/* Locked (mid-reply) rows: non-active trips are not clickable —
+   no dimming, just the not-allowed cursor (title attr explains why). */
+.row.locked {
+  cursor: not-allowed;
+}
 /* Dark selected states live in main.css (shared with rail/popover rows). */
 .row i {
   font-size: 0.95rem;
@@ -550,6 +581,10 @@ ul {
   max-width: 280px;
 }
 /* .pop-row.sel selected tint lives in main.css (shared). */
+/* Locked (mid-reply) popover rows: not clickable, no dimming. */
+.pop-row.locked {
+  cursor: not-allowed;
+}
 .pop-text {
   display: flex;
   flex-direction: column;

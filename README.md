@@ -178,7 +178,7 @@ covers the failure mode a critic exists for. See [Travel Critic Agent (discarded
 - [x] Build the conversational chat interface
 - [x] Support multi-turn conversations and LangGraph interrupts/resume
 - [x] Display subagents responses as complementary info
-- [ ] Support thread-based conversations
+- [x] Support thread-based conversations
 - [x] Display current travel requirements and planning state
 - [x] Let users pick research options in the chat (human-in-the-loop implementation)
 - [x] Display trip plan and budget information
