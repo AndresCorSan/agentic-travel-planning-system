@@ -124,6 +124,15 @@ function isTarget(t: RowTarget | null, kind: RowKind, id: string) {
 const isEditing = (kind: RowKind, id: string) => isTarget(editingTarget.value, kind, id);
 const isMenuOpen = (kind: RowKind, id: string) => isTarget(menuOpenTarget.value, kind, id);
 
+// Plan rows mirror chat rows: title + saved date below. Mock plans carry
+// no createdAt, so fall back to destination · dates there.
+function planMeta(p: { createdAt?: string | null; destination: string; dates: string }): string {
+  return (
+    formatUpdatedAt(p.createdAt) ||
+    [p.destination, p.dates].filter(Boolean).join(' · ')
+  );
+}
+
 // Single lookup for both row kinds.
 function getRowItem(kind: RowKind, id: string) {
   return kind === 'conv'
@@ -286,8 +295,8 @@ function askDelete(kind: RowKind, id: string) {
           >
             <i class="pi pi-bookmark" />
             <span v-if="!isEditing('plan', p.id)" class="row-text">
-              <span class="row-title">{{ p.destination }} · {{ p.dates }}</span>
-              <span class="meta">{{ p.status }}</span>
+              <span class="row-title">{{ p.title }}</span>
+              <span class="meta">{{ planMeta(p) }}</span>
             </span>
             <InputText
               v-else
@@ -356,8 +365,8 @@ function askDelete(kind: RowKind, id: string) {
           <li v-for="p in library.plans" :key="p.id">
             <button class="pop-row" :class="{ locked: navLocked }" :title="navLocked ? LOCKED_MSG : p.title" @click="openPlan(p.id)">
               <span class="pop-text">
-                <span class="pop-item-title">{{ p.destination }} · {{ p.dates }}</span>
-                <span class="meta">{{ p.status }}</span>
+                <span class="pop-item-title">{{ p.title }}</span>
+                <span class="meta">{{ planMeta(p) }}</span>
               </span>
             </button>
           </li>

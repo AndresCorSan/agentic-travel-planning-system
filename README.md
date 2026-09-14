@@ -182,7 +182,7 @@ covers the failure mode a critic exists for. See [Travel Critic Agent (discarded
 - [x] Display current travel requirements and planning state
 - [x] Let users pick research options in the chat (human-in-the-loop implementation)
 - [x] Display trip plan and budget information
-- [ ] Allow saving the current trip plan to the "Saved plans" library
+- [x] Allow saving the current trip plan to the "Saved plans" library
 
 ### Phase 9 — Persistence & Production Backend
 

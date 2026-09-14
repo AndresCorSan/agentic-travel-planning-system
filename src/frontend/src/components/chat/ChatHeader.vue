@@ -78,7 +78,6 @@ async function confirmSave() {
     <Button icon="pi pi-bars" severity="secondary" text rounded class="only-mobile" aria-label="Open navigation" @click="ui.navOpen = true" />
     <div class="title-wrap">
       <h1>{{ currentTitle() }}</h1>
-      <span class="status"><span class="dot" />Planning · mock data</span>
     </div>
     <div class="actions">
       <Button icon="pi pi-pencil" label="Rename" severity="secondary" text aria-label="Rename conversation" @click="openRename()" />
@@ -127,20 +126,6 @@ h1 {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.status {
-  font-size: 0.76rem;
-  color: var(--p-surface-500);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-}
-.dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--p-primary-500);
 }
 .actions {
   display: flex;

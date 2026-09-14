@@ -163,6 +163,24 @@ export async function savePlan(conversationId: string, title?: string): Promise<
   return data as SavedPlan;
 }
 
+export async function renamePlanRemote(id: string, title: string): Promise<void> {
+  if (import.meta.env.VITE_USE_BACKEND !== 'true') return;
+  try {
+    await api.patch(`/plans/${id}`, { title });
+  } catch {
+    // Optimistic local rename stays.
+  }
+}
+
+export async function deletePlanRemote(id: string): Promise<void> {
+  if (import.meta.env.VITE_USE_BACKEND !== 'true') return;
+  try {
+    await api.delete(`/plans/${id}`);
+  } catch {
+    // Optimistic local delete stays.
+  }
+}
+
 export interface MockSendResult {
   user: ChatMessage;
   replies: ChatMessage[];

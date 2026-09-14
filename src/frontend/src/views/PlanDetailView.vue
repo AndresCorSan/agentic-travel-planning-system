@@ -1,11 +1,12 @@
-<!-- Saved-plan detail page (/plans/:id): description + requirements +
-      trip plan + budget, all from the stored snapshot. -->
+<!-- Saved-plan detail page (/plans/:id): editorial header (overline +
+      title + lede + fact chips) plus the trip plan timeline, all from the
+      stored snapshot. -->
 <script setup lang="ts">
 import Button from 'primevue/button';
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { getSavedPlan } from '../api/travelService';
-import { categoryLabel, formatOptionPrice } from '../components/chat/richtext';
+import TripPlanSection from '../components/travel/TripPlanSection.vue';
 import type { SavedPlan } from '../types';
 
 const props = defineProps<{ id: string }>();
@@ -20,72 +21,110 @@ onMounted(async () => {
   else missing.value = true;
 });
 
-const confirmed = computed(() => (plan.value?.requirements ?? []).filter((r) => r.value));
-const unspecified = computed(() => (plan.value?.requirements ?? []).filter((r) => !r.value));
-
-function money(n: number | null | undefined, currency: string | null | undefined): string {
-  if (n === null || n === undefined) return '—';
-  return formatOptionPrice({ price: n, currency: currency ?? plan.value?.currency ?? null, per_person: false });
+interface FactChip {
+  key: string;
+  prefix: string;
+  bold: string;
+  suffix: string;
+  missing: boolean;
 }
+
+// Requirements as editorial fact chips (destination/dates live in the
+// overline). Ambiguous values get their label as context ("2 travelers").
+const factChips = computed<FactChip[]>(() => {
+  const chips: FactChip[] = [];
+  for (const r of plan.value?.requirements ?? []) {
+    if (r.key === 'destination' || r.key === 'dates') continue;
+    if (!r.value) {
+      chips.push({ key: r.key, prefix: '', bold: '', suffix: `${r.label} n/s`, missing: true });
+      continue;
+    }
+    const v = r.value;
+    switch (r.key) {
+      case 'travelers':
+        chips.push({ key: r.key, prefix: '', bold: v, suffix: 'travelers', missing: false });
+        break;
+      case 'budget':
+        chips.push({ key: r.key, prefix: '', bold: v, suffix: 'budget', missing: false });
+        break;
+      case 'origin':
+        chips.push({ key: r.key, prefix: 'From ', bold: v, suffix: '', missing: false });
+        break;
+      case 'duration':
+      case 'interests':
+      case 'transport':
+        chips.push({ key: r.key, prefix: '', bold: v, suffix: '', missing: false });
+        break;
+      default:
+        chips.push(
+          v === 'Yes' || v === 'No'
+            ? { key: r.key, prefix: '', bold: r.label, suffix: v.toLowerCase(), missing: false }
+            : { key: r.key, prefix: '', bold: v, suffix: '', missing: false }
+        );
+    }
+  }
+  return chips;
+});
+const travelers = computed(() => {
+  const raw = plan.value?.requirements?.find((r) => r.key === 'travelers')?.value;
+  const n = raw ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : null;
+});
 
 function backToConversation() {
   if (plan.value?.conversationId) router.push(`/trip/${plan.value.conversationId}`);
   else router.push('/plans');
 }
+
+// "2026-09-14T…" -> "Sep 14, 2026" for the overline.
+function savedLabel(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return `Saved ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+}
+
+const overline = computed(() =>
+  [plan.value?.destination, plan.value?.dates].filter(Boolean).join(' · ')
+);
+const savedText = computed(() => savedLabel(plan.value?.createdAt));
 </script>
 
 <template>
   <div class="detail">
-    <Button label="Back to plans" icon="pi pi-arrow-left" severity="secondary" text @click="router.push('/plans')" />
-    <template v-if="plan">
-      <h1>{{ plan.title }}</h1>
-      <p class="muted">{{ [plan.destination, plan.dates].filter(Boolean).join(' · ') }}</p>
-      <p v-if="plan.description" class="desc">{{ plan.description }}</p>
-
-      <h2>Trip requirements</h2>
-      <dl v-if="confirmed.length" class="reqs">
-        <div v-for="r in confirmed" :key="r.key" class="req">
-          <dt>{{ r.label }}</dt>
-          <dd>{{ r.value }}</dd>
-        </div>
-      </dl>
-      <div v-if="unspecified.length" class="missing">
-        <p class="missing-title">Not specified</p>
-        <ul>
-          <li v-for="r in unspecified" :key="r.key">{{ r.label }}</li>
-        </ul>
-      </div>
-
-      <h2>Trip plan</h2>
-      <div v-if="plan.plan?.length" class="items">
-        <div v-for="item in plan.plan" :key="`${item.category}:${item.option_id}`" class="item">
-          <span class="tx">
-            <b>{{ item.label }}</b>
-            <small>{{ categoryLabel(item.category) }}<template v-if="item.details"> · {{ item.details }}</template></small>
-          </span>
-          <span class="pr">{{ money(item.price, item.currency) }}</span>
-        </div>
-      </div>
-      <p v-else class="muted">No choices in this snapshot.</p>
-
-      <h2>Budget</h2>
-      <div class="row total">
-        <span>Total</span>
-        <strong>{{ money(plan.total, plan.currency) }}<span v-if="plan.budget !== null && plan.budget !== undefined" class="muted"> of {{ money(plan.budget, plan.currency) }}</span></strong>
-      </div>
-      <div v-if="plan.budget !== null && plan.budget !== undefined" class="row">
-        <span class="muted">{{ plan.overBudget ? 'Over by' : 'Remaining' }}</span>
-        <strong :class="plan.overBudget ? 'bad' : 'ok'">{{ money(Math.abs(plan.budget - (plan.total ?? 0)), plan.currency) }}</strong>
-      </div>
-
+    <div class="topbar">
+      <Button label="Back to plans" icon="pi pi-arrow-left" severity="secondary" text @click="router.push('/plans')" />
       <Button
-        v-if="plan.conversationId"
+        v-if="plan?.conversationId"
         label="Open conversation"
         icon="pi pi-comments"
         severity="secondary"
         text
-        class="conv-link"
         @click="backToConversation()"
+      />
+    </div>
+    <template v-if="plan">
+      <div class="head">
+        <div class="head-main">
+          <p class="overline">{{ overline }}</p>
+          <h1 class="title">{{ plan.title }}</h1>
+        </div>
+        <p v-if="savedText" class="saved">{{ savedText }}</p>
+      </div>
+      <p v-if="plan.description" class="lede">{{ plan.description }}</p>
+
+      <div v-if="factChips.length" class="facts">
+        <span v-for="c in factChips" :key="c.key" :class="{ miss: c.missing }"><template v-if="!c.missing">{{ c.prefix }}<b>{{ c.bold }}</b>{{ c.suffix ? ` ${c.suffix}` : '' }}</template><template v-else>{{ c.suffix }}</template></span>
+      </div>
+
+      <h2 class="plan-sep">Trip plan</h2>
+      <TripPlanSection
+        :items="plan.plan ?? []"
+        :total="plan.total ?? 0"
+        :currency="plan.currency ?? null"
+        :budget="plan.budget ?? null"
+        :over-budget="!!plan.overBudget"
+        :travelers="travelers"
       />
     </template>
     <p v-else-if="missing" class="muted">Plan not found.</p>
@@ -103,112 +142,73 @@ function backToConversation() {
   min-height: 0;
   overflow-y: auto;
 }
-h1 {
-  font-size: 1.3rem;
-  margin: 12px 0 4px;
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin: 12px 0 10px;
+}
+.head-main {
+  min-width: 0;
+}
+.overline {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--p-primary-600);
+  margin: 0 0 6px;
+}
+.title {
+  font-size: 1.7rem;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.saved {
+  flex: none;
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--p-surface-500);
+  white-space: nowrap;
+}
+.lede {
+  font-size: 1.02rem;
+  line-height: 1.6;
+  color: var(--p-surface-700);
+  margin: 0;
+  border-top: 3px solid var(--p-primary-600);
+  padding-top: 12px;
+}
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.facts span {
+  background: var(--p-surface-50);
+  border: 1px solid var(--p-surface-200);
+  border-radius: 99px;
+  padding: 5px 13px;
+  font-size: 0.82rem;
+}
+.facts span.miss {
+  border-style: dashed;
+  color: var(--p-surface-500);
 }
 h2 {
   font-size: 0.95rem;
   margin: 24px 0 8px;
 }
-.desc {
-  font-size: 0.95rem;
-  line-height: 1.55;
-  margin: 12px 0 0;
-}
-.reqs {
-  margin: 0;
-}
-.req {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 5px 0;
-  border-bottom: 1px dashed var(--p-surface-200);
-  font-size: 0.88rem;
-}
-.req dt {
-  color: var(--p-surface-500);
-  flex: none;
-}
-.req dd {
-  margin: 0;
-  font-weight: 500;
-  text-align: right;
-}
-.missing {
-  margin-top: 10px;
-}
-.missing-title {
-  font-size: 0.78rem;
-  color: var(--p-surface-500);
-  margin: 0 0 6px;
-}
-.missing ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.missing li {
-  border: 1px dashed var(--p-surface-300);
-  color: var(--p-surface-500);
-  border-radius: 99px;
-  padding: 3px 10px;
-  font-size: 0.8rem;
-}
-.items {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 0.88rem;
-  border: 1px solid var(--p-surface-200);
-  border-radius: 8px;
-  padding: 8px 12px;
-}
-.tx {
-  flex: 1;
-  min-width: 0;
-  line-height: 1.3;
-}
-.tx b {
-  display: block;
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-.tx small {
-  color: var(--p-surface-500);
-}
-.pr {
-  font-weight: 700;
-  white-space: nowrap;
-}
-.row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.88rem;
-  margin-bottom: 4px;
-}
-.row.total {
-  font-weight: 700;
-  padding-top: 8px;
+.plan-sep {
   border-top: 1px solid var(--p-surface-200);
-}
-.ok {
-  color: var(--p-green-600);
-}
-.bad {
-  color: var(--p-red-500);
-}
-.conv-link {
-  margin-top: 20px;
-  padding-left: 0;
+  padding-top: 20px;
 }
 </style>

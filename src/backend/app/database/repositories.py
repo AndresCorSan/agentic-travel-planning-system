@@ -84,3 +84,17 @@ async def list_saved_plans(session: AsyncSession) -> list[SavedPlan]:
 
 async def get_saved_plan(session: AsyncSession, plan_id: int) -> SavedPlan | None:
     return await session.get(SavedPlan, plan_id)
+
+
+async def rename_saved_plan(session: AsyncSession, plan_id: int, title: str) -> SavedPlan | None:
+    row = await session.get(SavedPlan, plan_id)
+    if row is None:
+        return None
+    row.title = title
+    await session.flush()
+    return row
+
+
+async def delete_saved_plan(session: AsyncSession, plan_id: int) -> bool:
+    res = await session.execute(delete(SavedPlan).where(SavedPlan.id == plan_id))
+    return bool(res.rowcount)

@@ -726,3 +726,27 @@ async def get_plan(plan_id: int):
         if row is None:
             raise HTTPException(status_code=404, detail="Plan not found")
         return _saved_plan_to_dict(row)
+
+
+class RenamePlanRequest(BaseModel):
+    title: str
+
+
+@router.patch("/plans/{plan_id}")
+async def rename_plan(plan_id: int, body: RenamePlanRequest):
+    async with AsyncSessionLocal() as session:
+        row = await repo.rename_saved_plan(session, plan_id, body.title.strip() or "Saved trip")
+        if row is None:
+            raise HTTPException(status_code=404, detail="Plan not found")
+        await session.commit()
+        return _saved_plan_to_dict(row)
+
+
+@router.delete("/plans/{plan_id}")
+async def delete_plan(plan_id: int):
+    async with AsyncSessionLocal() as session:
+        ok = await repo.delete_saved_plan(session, plan_id)
+        await session.commit()
+    if not ok:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    return {"deleted": plan_id}

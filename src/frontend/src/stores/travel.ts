@@ -392,9 +392,11 @@ export const useLibraryStore = defineStore('library', () => {
   function renamePlan(id: string, title: string) {
     const p = plans.value.find((p) => p.id === id);
     if (p) p.title = title;
+    if (BACKEND_MODE) void service.renamePlanRemote(id, title);
   }
   function deletePlan(id: string) {
     plans.value = plans.value.filter((p) => p.id !== id);
+    if (BACKEND_MODE) void service.deletePlanRemote(id);
   }
   function addConversation(title: string): Conversation {
     const c: Conversation = {
