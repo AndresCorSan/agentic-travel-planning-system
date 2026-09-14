@@ -1,7 +1,7 @@
 <!-- Scrollable message thread in the center of the chat view.
      Only this column scrolls; auto-scrolls to bottom on new messages. -->
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import type { AgentRow, ChatMessage } from '../../types';
 import AgentStatusBlock from './AgentStatusBlock.vue';
 import AssistantMessage from './AssistantMessage.vue';
@@ -27,6 +27,45 @@ const lastIsUser = computed(() => {
   return msgs.length > 0 && msgs[msgs.length - 1].role === 'user';
 });
 const hasStreamingText = computed(() => !!props.streaming?.text);
+// Stall detection: tokens normally arrive in a steady flow, so if none
+// arrives for STALL_MS while the turn is still loading, the LLM is most
+// likely thinking or running a tool — show the dots only then, so the
+// bubble doesn't look frozen. Any new token hides them again.
+const STALL_MS = 1500;
+const stalled = ref(false);
+let stallTimer: number | undefined;
+function clearStallTimer() {
+  if (stallTimer !== undefined) {
+    clearTimeout(stallTimer);
+    stallTimer = undefined;
+  }
+}
+function armStallTimer() {
+  clearStallTimer();
+  stalled.value = false;
+  stallTimer = window.setTimeout(() => {
+    if (props.loading) stalled.value = true;
+  }, STALL_MS);
+}
+watch(
+  () => props.streaming?.text?.length ?? 0,
+  () => {
+    if (props.loading && hasStreamingText.value) armStallTimer();
+  }
+);
+watch(
+  () => props.loading,
+  (v) => {
+    if (v) {
+      if (hasStreamingText.value) armStallTimer();
+    } else {
+      clearStallTimer();
+      stalled.value = false;
+    }
+  }
+);
+onUnmounted(clearStallTimer);
+const showStreamingBusy = computed(() => props.loading && hasStreamingText.value && stalled.value);
 const showStatus = computed(
   () => props.loading && (!props.messages.length || lastIsUser.value) && !hasStreamingText.value
 );
@@ -53,6 +92,7 @@ watch([() => props.messages.length, () => props.loading, () => props.streaming?.
           :message="streaming"
           :chosen-destination="chosenDestination"
           :live="true"
+          :busy="showStreamingBusy"
           @choose="(messageId, id, name) => emit('choose', messageId, id, name)"
         />
       </div>

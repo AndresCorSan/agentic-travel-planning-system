@@ -345,7 +345,12 @@ async def _stream(graph, conversation_id: str, message: str):
                         if agents:
                             yield _frame("status", {"text": "Executing specialized subagents…"})
                             yield _frame("agents.start", {"agents": agents})
-                    elif node == "main_tools" and output.get("requirements") is not None:
+                    if node == "main_tools":
+                        # The LLM paused mid-reply to run a tool: keep the
+                        # status fresh so the UI can show activity during
+                        # the gap between token batches.
+                        yield _frame("status", {"text": "Working on details…"})
+                    if node == "main_tools" and output.get("requirements") is not None:
                         # update_requirements returns a Command carrying the new
                         # requirements: push them live instead of waiting for
                         # the turn to finish.

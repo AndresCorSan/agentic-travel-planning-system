@@ -13,7 +13,7 @@ import SubagentResults from './SubagentResults.vue';
 import MessageTime from './MessageTime.vue';
 import { renderOptionGroups, renderRich } from './richtext';
 
-const props = defineProps<{ message: ChatMessage; chosenDestination: string | null; live?: boolean }>();
+const props = defineProps<{ message: ChatMessage; chosenDestination: string | null; live?: boolean; busy?: boolean }>();
 const emit = defineEmits<{ choose: [messageId: string, id: string, name: string] }>();
 
 const travel = useTravelStore();
@@ -65,6 +65,7 @@ function onSave() {
     <div class="ai-body">
       <SubagentResults v-if="message.subagentResults?.length" :results="message.subagentResults" />
       <div v-if="html" class="prose" v-html="html" @click="onProseClick" />
+      <span v-if="live && busy" class="busy-line"><span>Working on it</span><span class="tballs" aria-hidden="true"><span></span><span></span><span></span></span></span>
       <div v-if="autoHtml" class="prose" v-html="autoHtml" @click="onProseClick" />
       <div v-if="!live && hasSaveable" class="save-bar">
         <span v-if="travel.choicesSaved[message.id]" class="saved-note"><i class="pi pi-check-circle" /> Choices saved to your trip plan.</span>
@@ -148,5 +149,15 @@ function onSave() {
 .time {
   font-size: 0.7rem;
   color: var(--p-surface-500);
+}
+/* Stall indicator shown under live text when no tokens arrive for a
+   while (LLM thinking / tool calls): same look as AgentStatusBlock. */
+.busy-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  color: var(--p-surface-500);
+  font-size: 0.88rem;
 }
 </style>
