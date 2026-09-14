@@ -10,11 +10,17 @@ MCP_SERVERS = {
         "transport": "http",
         "url": "https://mcp.ticketlens.com/",
     },
-    # Alternative OpenMeteo MCP for testing weather tools
-    # https://github.com/cyanheads/open-meteo-mcp-server
     "weather": {
-        "transport": "streamable_http",
-        "url": "https://open-meteo.caseyjhand.com/mcp",
+        "transport": "stdio",
+        "command": "npx",
+        "args": [
+            "-y",
+            "@dangahagan/weather-mcp@latest"
+        ],
+        "env": {
+            "ENABLED_TOOLS": "basic,+historical,+air_quality",
+            "WEATHER_UNITS": "metric"
+        },
     },
     "trvl": {
         "transport": "stdio",
@@ -27,9 +33,12 @@ MCP_SERVERS = {
     },
 }
 
-# Only these TicketLens tools are kept (see notebooks phase3-5).
+# From TicketLens and Weather MCPs, we only want a subset of the tools
 TICKETLENS_TOOL_NAMES = {"search_pois", "search_tours", "get_tour"}
-
+WEATHER_TOOL_NAMES = {
+    "get_weather_summary", "get_forecast", "get_current_conditions",
+    "get_alerts", "search_location", "get_historical_weather", "get_air_quality"
+}
 
 def create_mcp_client() -> MultiServerMCPClient:
     return MultiServerMCPClient(MCP_SERVERS)
@@ -92,9 +101,7 @@ async def load_mcp_tools() -> dict:
             continue
         for t in server_tools:
             t = _guard_tool(t)
-            if t.name.startswith("openmeteo"):
-                weather_tools.append(t)
-            elif t.name in TICKETLENS_TOOL_NAMES:
+            if t.name in TICKETLENS_TOOL_NAMES:
                 ticketlens_tools.append(t)
             elif t.name == "travel":
                 trvl_tool = t
@@ -102,6 +109,9 @@ async def load_mcp_tools() -> dict:
                 # Renamed to avoid conflicts with other MCPs
                 t.name = "search_rental_cars"
                 rental_cars_tool = t
+            elif t.name in WEATHER_TOOL_NAMES:
+                weather_tools.append(t)
+                print(f"Loaded weather tool: {t.name}")
 
     return {
         "weather_tools": weather_tools,
