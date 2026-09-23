@@ -316,8 +316,12 @@ Tracked information will include:
 
 ## 12. Evaluation
 
-The system will include a reproducible evaluation dataset containing realistic
-travel requests and constraints.
+The system includes a reproducible, fully local evaluation setup
+(`src/backend/evals/`): a versioned dataset of realistic travel requests,
+a simulator harness that drives the graph through complete multi-turn
+conversations, and a Jev-as-judge scorer. Deliberately no LangSmith
+dependency at eval time — iteration speed (pytest in seconds) matters more
+than cloud dashboards while the judge questions are being calibrated.
 
 Key metrics:
 
@@ -327,6 +331,36 @@ Key metrics:
 * **Replanning success** — can the agent recover from an invalid plan?
 * **Tool efficiency** — does the agent use tools appropriately?
 * **Latency and cost** — how expensive and slow is a planning session?
+
+### Evaluation dataset (`src/backend/evals/dataset.jsonl`)
+
+One JSON object per line, 50 cases (`eval-001`…`eval-050`, prompts in
+English). Each line has this structure:
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | string | Stable case id, referenced by runs and scores. |
+| `prompt` | string | Initial user message, written as a realistic user would. |
+| `personality` | string | Hidden user profile shown **only** to the simulator LLM (never to the system): latent preferences for intermediate decisions, and mid-conversation changes (destination/duration/budget switches) where applicable. |
+| `expected.destination` | string \| null | Fixed destination, or `null` for open cases that must go through `destination_research`. |
+| `expected.budget` | number \| null | Total budget cap, or `null` when the case sets none. |
+| `expected.currency` | string \| null | Budget currency (or `null` together with budget). |
+| `expected.travelers` | number \| null | Party size, or `null` when unspecified. |
+| `expected.dates` | string \| null | Dates/duration in free text. |
+| `expected.must_satisfy` | string[] | 2–5 atomic, checkable conditions (one fact each) against the final `requirements` + `trip_plan`. The Jev judge asks one yes/no question per condition. `expected` always reflects the **final** state after any mid-conversation change, not the initial prompt. |
+
+### Case coverage groups
+
+| IDs | Group | What it exercises |
+|---|---|---|
+| `eval-001`–`eval-010` | Fixed destination + dates + budget | Direct `orchestrator` path: couples, families, solo, business, anniversary, ski, accessibility needs. |
+| `eval-011`–`eval-020` | Open destination | `destination_research` + user decision: beach, museums, hiking, romance, auroras, surf, budget escape, teens, digital nomad, foodie. |
+| `eval-021`–`eval-026` | Indecision between 2–3 destinations | Comparison + `CHOOSE_PREFIX` resume path. |
+| `eval-027`–`eval-032` | Mid-conversation change of mind | Re-entry into `extract` (replanning): destination switch, shorter/longer trip, dropped budget, injury, extra traveler, extended stay. |
+| `eval-033`–`eval-037` | Tight or impossible budget | System honesty: luxury on an unworkable budget, absurd requests, plus realistic backpacker cases. |
+| `eval-038`–`eval-042` | Groups and families | Party-size math (`per_person` × N): villa for 6, two families, kids, grandparents, surf camp. |
+| `eval-043`–`eval-046` | Single category | Partial subagent use: activities only, transport only, accommodation only, day trip without overnight stay. |
+| `eval-047`–`eval-050` | Adversarial / edge cases | Past dates, fictional destination, near-empty prompt (must ask, not guess), last-minute full booking. |
 
 ---
 
