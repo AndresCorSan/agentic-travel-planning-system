@@ -11,8 +11,20 @@ Only include information explicitly stated by the user.
 Do not infer preferences, constraints, destinations, dates, budgets, or other values.
 
 Preserve the user's meaning when normalizing values such as dates and currency.
-Map "by train"/"flying"/"driving" style statements to transport_mode and
-"hotel"/"hostel"/"apartment" mentions to accommodation_type.
+Map logistics to their dedicated fields, never to constraints or interests:
+- "to <place>" goes to destination; "from <place>" goes to origin.
+- "by <means>" ("by train", "flying", "driving"...) goes to transport_mode ("train", "flight", "car"...); "hotel"/"hostel"/"apartment" mentions go to accommodation_type.
+- "<N> travelers/people" goes to travelers (integer); "<N>-night/<N>-day trip" goes to duration_days (integer).
+- Explicit dates go to travel_dates; an amount with currency goes to budget + currency.
+interests holds only thematic keywords (beach, gastronomy, hiking...).
+constraints holds only restrictions with no dedicated field (budget-friendly, no flights, ...).
+Never repeat the same fact in two fields.
+If no amount is stated, leave budget AND currency null — never guess them.
+
+Example: "Cheap 2-night food trip to Lisbon from Porto by train,
+2 travelers" becomes origin "Porto", destination "Lisbon",
+duration_days 2, travelers 2, transport_mode "train",
+interests ["food"], constraints ["cheap"], everything else null.
 Leave unknown fields empty.
 Use JSON null for unknown fields — never the string "None".
 

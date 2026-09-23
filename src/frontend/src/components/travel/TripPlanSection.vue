@@ -4,7 +4,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { PlanItem } from '../../types';
-import { formatOptionPrice } from '../chat/richtext';
+import { formatOptionPrice, groupLabel } from '../chat/richtext';
 
 const props = withDefaults(
   defineProps<{
@@ -87,6 +87,32 @@ const CATEGORY_ICONS: Record<string, string> = {
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
 };
 const iconFor = (category: string) => CATEGORY_ICONS[category] ?? CATEGORY_ICONS.activities;
+
+// Display order: outbound transportation, accommodation, rental car,
+// activities, then the remaining transportation legs (return...).
+// Within the same slot, save order is preserved (stable sort).
+const OUTBOUND_GROUPS = ['', 'outbound', 'outward', 'departure'];
+function planRank(item: PlanItem): [number, string] {
+  const group = (item.group ?? '').trim().toLowerCase();
+  if (item.category === 'transportation' && !OUTBOUND_GROUPS.includes(group)) return [4, group];
+  switch (item.category) {
+    case 'transportation': return [0, group];
+    case 'accommodation': return [1, ''];
+    case 'rental_car': return [2, ''];
+    case 'activities': return [3, ''];
+    default: return [5, item.category];
+  }
+}
+const sortedItems = computed(() =>
+  props.items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => {
+      const [ra, ga] = planRank(a.item);
+      const [rb, gb] = planRank(b.item);
+      return ra - rb || (ga < gb ? -1 : ga > gb ? 1 : 0) || a.index - b.index;
+    })
+    .map((e) => e.item)
+);
 </script>
 
 <template>
@@ -96,9 +122,9 @@ const iconFor = (category: string) => CATEGORY_ICONS[category] ?? CATEGORY_ICONS
       <p>{{ emptyText }}</p>
     </div>
     <div v-else class="tl">
-      <div v-for="item in items" :key="`${item.category}:${item.option_id}`" class="tl-item">
+      <div v-for="item in sortedItems" :key="`${item.category}:${item.group ?? ''}:${item.option_id}`" class="tl-item">
         <span class="badge" v-html="iconFor(item.category)" />
-        <span class="tx"><b>{{ item.label }}</b><small v-if="item.details">{{ item.details }}</small></span>
+        <span class="tx"><b>{{ item.label }}<span v-if="item.group" class="grp">{{ groupLabel(item.group) }}</span></b><small v-if="item.details">{{ item.details }}</small></span>
         <span class="pr">{{ lineTotal(item.price, item.per_person, item.currency) }}<small v-if="lineDetail(item)">{{ lineDetail(item) }}</small></span>
       </div>
     </div>
@@ -210,6 +236,17 @@ const iconFor = (category: string) => CATEGORY_ICONS[category] ?? CATEGORY_ICONS
   display: block;
   font-size: 0.85rem;
   font-weight: 600;
+}
+.grp {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--p-primary-600);
+  background: color-mix(in srgb, var(--p-primary-600) 12%, transparent);
+  border-radius: 99px;
+  padding: 1px 8px;
+  margin-left: 6px;
+  vertical-align: 1px;
 }
 .tx small {
   color: var(--p-surface-500);

@@ -91,6 +91,9 @@ export interface PlanOption {
   currency: string | null;
   per_person: boolean;
   details: string;
+  /** Selectable leg within the category ("outbound", "return", "leg 1"...).
+      Empty means the category's single default group. */
+  group: string;
 }
 
 /** A user choice saved into the trip plan (snapshot, via `plan.updated`). */
@@ -108,7 +111,8 @@ export interface PlanUpdate {
   overBudget: boolean;
 }
 
-/** Categories where a new choice replaces the previous one. */
+/** Categories where a new choice replaces the previous one. The replacement
+    key is (category, group), so legs like outbound/return are independent. */
 export const SINGLE_CHOICE_CATEGORIES = ['transportation', 'accommodation', 'rental_car'];
 
 export interface BudgetSummary {

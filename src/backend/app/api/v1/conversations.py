@@ -141,6 +141,7 @@ def _option_to_dict(opt) -> dict:
         "currency": get("currency"),
         "per_person": bool(get("per_person", False)),
         "details": get("details", "") or "",
+        "group": str(get("group", "") or ""),
     }
 
 
@@ -165,6 +166,7 @@ def _plan_payload(values: dict) -> dict:
             "currency": get_it("currency"),
             "per_person": bool(get_it("per_person", False)),
             "details": get_it("details", "") or "",
+            "group": str(get_it("group", "") or ""),
         })
     total, currency = plan_total(raw_plan, travelers)
     return {
@@ -375,9 +377,17 @@ async def _stream(graph, conversation_id: str, message: str):
                         )
                     if node == "main_tools" and output.get("available_options") is not None:
                         # present_options published selectable options: push
-                        # each category so the UI can render choice controls.
+                        # each touched category so the UI can render choice
+                        # controls. Read the lists back from state (not the
+                        # update payload): parallel same-category calls (one
+                        # per leg, e.g. outbound + return) stream as separate
+                        # updates that the payload merge above would collapse
+                        # to the last leg only.
                         tools_ran = True
-                        for category, opts in (output["available_options"] or {}).items():
+                        state_now = await graph.aget_state(config)
+                        fresh_opts = (state_now.values or {}).get("available_options") or {}
+                        for category in (output["available_options"] or {}):
+                            opts = fresh_opts.get(category) or []
                             yield _frame(
                                 "options",
                                 {
@@ -468,7 +478,7 @@ async def save_choices(conversation_id: str, body: SaveChoicesRequest, graph=Dep
     """Save UI button selections deterministically (no LLM resolution).
 
     Resolves option_ids against available_options, snapshots label/price
-    into the trip plan (replacement per single-choice category). Returns
+    into the trip plan (replacement per single-choice (category, group)). Returns
     the saved labels; the frontend then sends the user message through
     the normal pipeline (like "Let's go with…"), where extract+router
     short-circuit on SAVED_CHOICES_PREFIX straight to main_llm.
@@ -499,6 +509,7 @@ async def save_choices(conversation_id: str, body: SaveChoicesRequest, graph=Dep
                 status_code=422,
                 detail=f"Unknown option '{ch.option_id}' for category '{ch.category}'",
             )
+        group = str(get("group", "") or "")
         item = PlanItem(
             category=ch.category,
             option_id=str(ch.option_id),
@@ -507,15 +518,17 @@ async def save_choices(conversation_id: str, body: SaveChoicesRequest, graph=Dep
             currency=get("currency"),
             per_person=bool(get("per_person", False)),
             details=get("details", "") or "",
+            group=group,
         )
         key = lambda it: (
             it["category"] if isinstance(it, dict) else it.category,
+            str((it["group"] if isinstance(it, dict) else it.group) or ""),
             str(it["option_id"] if isinstance(it, dict) else it.option_id),
         )
         if ch.category in SINGLE_CHOICE_CATEGORIES:
-            plan = [it for it in plan if key(it)[0] != ch.category]
+            plan = [it for it in plan if key(it)[:2] != (ch.category, group)]
             plan.append(item)
-        elif not any(key(it) == (ch.category, str(ch.option_id)) for it in plan):
+        elif not any(key(it) == (ch.category, group, str(ch.option_id)) for it in plan):
             plan.append(item)
         saved.append(item.label)
     await graph.aupdate_state(config, {"trip_plan": plan})

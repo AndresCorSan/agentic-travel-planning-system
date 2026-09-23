@@ -5,6 +5,7 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import * as service from '../api/travelService';
 import { AGENT_LABELS, AGENT_RESEARCH_KEY, SAVED_CHOICES_PREFIX } from '../api/stream';
+import { groupLabel } from '../components/chat/richtext';
 import type { SubagentResult, AgentRow, BudgetSummary, ChatMessage, Conversation, PlanItem, PlanOption, PlanUpdate, ResearchStatus, RequirementItem, SavedPlan, StreamEvent } from '../types';
 import { SINGLE_CHOICE_CATEGORIES } from '../types';
 
@@ -54,6 +55,13 @@ export const useTravelStore = defineStore('travel', () => {
   // messages already saved (controls locked afterwards).
   const drafts = ref<Record<string, Record<string, boolean>>>({});
   const choicesSaved = ref<Record<string, boolean>>({});
+  // Merge incoming options into a category list per group: a republish
+  // replaces only its own group's options (e.g. a fresh "outbound" keeps
+  // the published "return" ones). Mirrors backend _merge_options.
+  function mergeOptions(existing: PlanOption[], incoming: PlanOption[]): PlanOption[] {
+    const groups = new Set(incoming.map((o) => o.group ?? ''));
+    return [...existing.filter((o) => !groups.has(o.group ?? '')), ...incoming];
+  }
   function toggleOption(messageId: string, optionId: string) {
     const opt = optionsById.value[optionId];
     if (!opt || choicesSaved.value[messageId]) return;
@@ -61,17 +69,18 @@ export const useTravelStore = defineStore('travel', () => {
     const next = !draft[optionId];
     if (next && SINGLE_CHOICE_CATEGORIES.includes(opt.category)) {
       for (const [id, on] of Object.entries(draft)) {
-        if (on && optionsById.value[id]?.category === opt.category) draft[id] = false;
+        const other = optionsById.value[id];
+        if (on && other?.category === opt.category && (other.group ?? '') === (opt.group ?? '')) draft[id] = false;
       }
     }
     draft[optionId] = next;
     drafts.value = { ...drafts.value, [messageId]: draft };
   }
-  function draftChoices(messageId: string): { category: string; option_id: string }[] {
+  function draftChoices(messageId: string): { category: string; group: string; option_id: string }[] {
     const draft = drafts.value[messageId] ?? {};
     return Object.entries(draft)
       .filter(([, on]) => on)
-      .map(([id]) => ({ category: optionsById.value[id]?.category ?? '', option_id: id }))
+      .map(([id]) => ({ category: optionsById.value[id]?.category ?? '', group: optionsById.value[id]?.group ?? '', option_id: id }))
       .filter((c) => c.category);
   }
   async function saveChoices(messageId: string) {
@@ -97,22 +106,25 @@ export const useTravelStore = defineStore('travel', () => {
           const idx = ['transportation', 'accommodation', 'rental_car', 'activities'].indexOf(c);
           return idx < 0 ? 99 : idx;
         };
-        const catLabel = (c: string) => {
+        const catLabel = (c: string, g: string) => {
           const words = c.replace(/_/g, ' ');
-          return words.charAt(0).toUpperCase() + words.slice(1);
+          const base = words.charAt(0).toUpperCase() + words.slice(1);
+          return g ? `${base} (${groupLabel(g)})` : base;
         };
         const named = choices.map((c, i) => ({
           category: c.category,
+          group: c.group ?? '',
           name: names[i] ?? c.option_id,
         }));
-        // One line per category (multi-choice ones join with commas).
-        const byCategory = new Map<string, string[]>();
-        for (const n of named.sort((a, b) => order(a.category) - order(b.category))) {
-          const list = byCategory.get(n.category) ?? [];
-          list.push(n.name);
-          byCategory.set(n.category, list);
+        // One line per (category, group) (multi-choice ones join with commas).
+        const byCategory = new Map<string, { category: string; group: string; names: string[] }>();
+        for (const n of named.sort((a, b) => order(a.category) - order(b.category) || (a.group < b.group ? -1 : a.group > b.group ? 1 : 0))) {
+          const k = `${n.category}||${n.group}`;
+          const entry = byCategory.get(k) ?? { category: n.category, group: n.group, names: [] };
+          entry.names.push(n.name);
+          byCategory.set(k, entry);
         }
-        const lines = [...byCategory].map(([c, ns]) => `- ${catLabel(c)}: ${ns.join(', ')}`);
+        const lines = [...byCategory.values()].map((e) => `- ${catLabel(e.category, e.group)}: ${e.names.join(', ')}`);
         await send(`${SAVED_CHOICES_PREFIX}\n${lines.join('\n')}`);
       }
     } finally {
@@ -297,10 +309,10 @@ export const useTravelStore = defineStore('travel', () => {
         requirements.value = ev.requirements;
         break;
       case 'options':
-        optionsByCategory.value = { ...optionsByCategory.value, [ev.category]: ev.options };
+        optionsByCategory.value = { ...optionsByCategory.value, [ev.category]: mergeOptions(optionsByCategory.value[ev.category] ?? [], ev.options) };
         pendingTurnOptions = [
           ...pendingTurnOptions.filter((g) => g.category !== ev.category),
-          { category: ev.category, options: ev.options },
+          { category: ev.category, options: mergeOptions(pendingTurnOptions.find((g) => g.category === ev.category)?.options ?? [], ev.options) },
         ];
         break;
       case 'plan.updated':

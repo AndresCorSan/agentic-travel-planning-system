@@ -33,6 +33,12 @@ export function categoryLabel(category: string): string {
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : category;
 }
 
+/** Display label for an option group ("outbound" -> "Outbound"). */
+export function groupLabel(group: string): string {
+  const words = group.replace(/_/g, ' ').trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : group;
+}
+
 function renderControl(id: string, o: PlanOption & { category: string }, ctx: OptionRenderCtx): string {
   const price = formatOptionPrice(o);
   return `<button type="button" class="opt-pick" data-option="${escapeHtml(id)}" data-checked="${ctx.checked(id) ? '1' : '0'}" data-locked="${ctx.locked ? '1' : '0'}" data-single="${ctx.single(o.category) ? '1' : '0'}" title="${escapeHtml(o.details || o.label)}"><span class="opt-box"></span><span class="opt-label">${escapeHtml(o.label)}</span>${price ? `<span class="opt-price">${escapeHtml(price)}</span>` : ''}</button>`;
@@ -50,21 +56,32 @@ export interface OptionGroup {
 }
 
 /** Choice controls grouped by category, rendered under the message.
-// Same data-option delegation as before; clicks are handled by the host
-// component, so no Vue bindings are needed inside v-html. */
+// Categories split further by option group, so legs like outbound vs
+// return render as their own selector sections. Same data-option
+// delegation as before; clicks are handled by the host component, so
+// no Vue bindings are needed inside v-html. */
 export function renderOptionGroups(groups: OptionGroup[], ctx: OptionRenderCtx): string {
   const parts: string[] = [];
   for (const g of groups) {
-    const buttons = (g.options ?? [])
-      .map((o) => {
-        const full = ctx.lookup(o.id) ?? { ...o, category: g.category };
-        return renderControl(o.id, full, ctx);
-      })
-      .join('');
-    if (!buttons) continue;
-    parts.push(
-      `<div class="opt-group"><p class="opt-cat">${escapeHtml(categoryLabel(g.category))}</p><div class="opt-list">${buttons}</div></div>`
-    );
+    const byGroup = new Map<string, PlanOption[]>();
+    for (const o of g.options ?? []) {
+      const k = o.group ?? '';
+      if (!byGroup.has(k)) byGroup.set(k, []);
+      byGroup.get(k)!.push(o);
+    }
+    for (const [group, opts] of byGroup) {
+      const buttons = opts
+        .map((o) => {
+          const full = ctx.lookup(o.id) ?? { ...o, category: g.category };
+          return renderControl(o.id, full, ctx);
+        })
+        .join('');
+      if (!buttons) continue;
+      const title = group ? `${categoryLabel(g.category)} — ${groupLabel(group)}` : categoryLabel(g.category);
+      parts.push(
+        `<div class="opt-group"><p class="opt-cat">${escapeHtml(title)}</p><div class="opt-list">${buttons}</div></div>`
+      );
+    }
   }
   if (!parts.length) return '';
   return DOMPurify.sanitize(`<div class="opt-fallback">${parts.join('')}</div>`);
