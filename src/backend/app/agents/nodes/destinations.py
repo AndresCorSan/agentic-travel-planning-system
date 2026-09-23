@@ -1,7 +1,7 @@
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.types import interrupt
 from pydantic import BaseModel
-from app.agents.llm import llm
+from app.agents.ai_models import llm
 from app.agents.state import DestinationCandidate, TravelState
 from app.agents.utils import sanitize_messages_for_llm
 

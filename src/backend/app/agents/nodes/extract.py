@@ -1,5 +1,5 @@
 from langchain_core.messages import HumanMessage, SystemMessage
-from app.agents.llm import low_reasoning_llm
+from app.agents.ai_models import low_reasoning_llm
 from app.agents.state import TravelRequirements, TravelState
 from app.agents.tools.plan import SAVED_CHOICES_PREFIX
 from app.agents.utils import current_date_message, sanitize_messages_for_llm

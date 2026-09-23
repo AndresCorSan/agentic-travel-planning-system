@@ -9,7 +9,7 @@ from langgraph.types import Command
 from pydantic import BaseModel
 
 from app.core.dependencies import get_graph
-from app.agents.llm import light_llm
+from app.agents.ai_models import light_llm
 from app.agents.state import PlanItem, SINGLE_CHOICE_CATEGORIES
 from app.agents.tools.plan import plan_total
 from app.database.database import AsyncSessionLocal

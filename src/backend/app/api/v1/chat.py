@@ -2,7 +2,7 @@ from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
 from fastapi import APIRouter
 
-from app.agents.llm import light_llm
+from app.agents.ai_models import light_llm
 
 router = APIRouter()
 

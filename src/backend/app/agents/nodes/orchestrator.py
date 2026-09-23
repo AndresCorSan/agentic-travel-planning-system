@@ -2,7 +2,7 @@ from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import SystemMessage
 from langgraph.types import Send
 import logging
-from app.agents.llm import llm
+from app.agents.ai_models import llm
 from app.agents.state import OrchestrationPlan, TravelState
 from app.agents.utils import current_date_message, sanitize_messages_for_llm
 

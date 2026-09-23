@@ -1,5 +1,5 @@
 from langchain_core.messages import SystemMessage
-from app.agents.llm import llm
+from app.agents.ai_models import llm
 from app.agents.state import TravelState
 from app.agents.tools.plan import add_plan_item, present_options, remove_plan_item
 from app.agents.tools.requirements import update_requirements

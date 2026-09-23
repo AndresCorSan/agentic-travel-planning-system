@@ -1,7 +1,7 @@
 from typing import Literal
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel
-from app.agents.llm import light_llm
+from app.agents.ai_models import JEV_CONFIDENCE_THRESHOLD, decide_route_via_jev, light_llm
 from app.agents.state import TravelState
 from app.agents.tools.plan import SAVED_CHOICES_PREFIX
 from app.agents.utils import sanitize_messages_for_llm
@@ -39,6 +39,33 @@ Base the decision only on the user's request. Do not invent requirements.
 class ResearchDecision(BaseModel):
     route: Literal["destination_research", "orchestrator", "main_llm"]
 
+
+JEV_ROUTE_INSTRUCTIONS = (
+    "Which route should handle the user's latest message? "
+    "Check main_llm first, then destination_research, then orchestrator."
+)
+
+JEV_ROUTE_CRITERIA = {
+    "main_llm": (
+        "greetings, small talk, thanks, goodbyes; merely mentioning a trip "
+        "or destination in passing without asking for anything (no ideas, "
+        "recommendations, or options requested); general information "
+        "questions answerable from general knowledge or the current "
+        "conversation state. No research tools needed."
+    ),
+    "destination_research": (
+        "user has not committed to a single destination and asks for "
+        "destination ideas, suggestions, recommendations, or inspiration "
+        "(e.g. 'where should I go', 'which city do you recommend'), "
+        "or wants to discover, compare, or choose between destinations."
+    ),
+    "orchestrator": (
+        "user explicitly asks for concrete, bookable options requiring "
+        "specialist research: specific hotels, flights, activities, "
+        "transport, rental cars, or weather for a planned trip."
+    ),
+}
+
 structured_router_llm = light_llm.with_structured_output(ResearchDecision)
 
 async def research_router(state: TravelState):
@@ -47,6 +74,29 @@ async def research_router(state: TravelState):
     # skip the routing call and go straight there.
     if messages and isinstance(messages[-1], HumanMessage) and str(messages[-1].content or "").startswith(SAVED_CHOICES_PREFIX):
         return {"next_step": "main_llm"}
+
+    # Fast path: Jev decision model via OpenRouter (no text generation).
+    # Falls back to the chat LLM on error, unknown choice, or low confidence.
+    sanitized = sanitize_messages_for_llm(state["messages"])
+    conversation = "\n".join(
+        f"{getattr(m, 'type', 'message')}: {m.content}" for m in sanitized[-10:]
+    )
+    requirements = state.get("requirements")
+    jev_state = {
+        "requirements": str(requirements) if requirements else "none yet",
+        "conversation": conversation,
+    }
+    jev_result = await decide_route_via_jev(
+        state=jev_state,
+        instructions=JEV_ROUTE_INSTRUCTIONS,
+        criteria=JEV_ROUTE_CRITERIA,
+    )
+    if jev_result is not None:
+        choice, confidence = jev_result
+        if confidence >= JEV_CONFIDENCE_THRESHOLD:
+            return {"next_step": choice}
+
+    # Fallback: structured output from the chat LLM
     response = await structured_router_llm.ainvoke([
         SystemMessage(content=RESEARCH_ROUTER_PROMPT),
         *sanitize_messages_for_llm(state["messages"]),
