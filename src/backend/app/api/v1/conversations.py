@@ -63,6 +63,20 @@ def _frame(event: str, payload: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(payload)}\n\n"
 
 
+def _trace_config(conversation_id: str) -> dict:
+    """LangGraph invoke config with LangSmith trace context.
+
+    `configurable.thread_id` is the checkpointer key (functional, not a
+    filter). `metadata.conversation_id` is what makes runs filterable in
+    the LangSmith UI; `tags` allow cross-cutting slices.
+    """
+    return {
+        "configurable": {"thread_id": conversation_id},
+        "metadata": {"conversation_id": conversation_id},
+        "tags": ["travel-planner"],
+    }
+
+
 def _task_agent(task) -> str | None:
     if hasattr(task, "agent"):
         return task.agent
@@ -250,7 +264,7 @@ def _requirements_to_items(req) -> list[dict]:
 
 
 async def _stream(graph, conversation_id: str, message: str):
-    config = {"configurable": {"thread_id": conversation_id}}
+    config = _trace_config(conversation_id)
     # Persist the user turn up-front so history survives mid-stream crashes.
     try:
         async with AsyncSessionLocal() as session:
@@ -461,7 +475,7 @@ async def save_choices(conversation_id: str, body: SaveChoicesRequest, graph=Dep
     """
     if graph is None:
         raise HTTPException(status_code=503, detail="Graph not initialized")
-    config = {"configurable": {"thread_id": conversation_id}}
+    config = _trace_config(conversation_id)
     state = await graph.aget_state(config)
     values = state.values or {}
     avail = values.get("available_options") or {}
@@ -648,7 +662,7 @@ def _fallback_description(requirements: list[dict], payload: dict) -> str:
     return f"{bits} with {n} saved choice(s). Details, totals and budget are listed below."
 
 
-async def _describe_plan(requirements: list[dict], payload: dict) -> str:
+async def _describe_plan(requirements: list[dict], payload: dict, conversation_id: str) -> str:
     """Standalone light_llm call (not the graph): the input is just the snapshot."""
     confirmed = [f"{r.get('label')}: {r.get('value')}" for r in requirements if isinstance(r, dict) and r.get("value")]
     picks = [f"{i.get('category')}: {i.get('label')}" for i in (payload.get("plan") or []) if isinstance(i, dict)]
@@ -658,7 +672,7 @@ async def _describe_plan(requirements: list[dict], payload: dict) -> str:
         msg = await light_llm.ainvoke([
             SystemMessage(content=PLAN_DESCRIPTION_PROMPT),
             HumanMessage(content=summary),
-        ])
+        ], config=_trace_config(conversation_id))
         text = (getattr(msg, "content", "") or "").strip()
         return text or _fallback_description(requirements, payload)
     except Exception:
@@ -709,7 +723,7 @@ async def save_plan(conversation_id: str, body: SavePlanRequest, graph=Depends(g
     if not payload["plan"]:
         raise HTTPException(status_code=422, detail="Pick at least one option before saving a plan")
     title = (body.title or "").strip() or f"{destination} trip"
-    description = await _describe_plan(requirements, payload)
+    description = await _describe_plan(requirements, payload, conversation_id)
     async with AsyncSessionLocal() as session:
         await repo.ensure_conversation(session, conversation_id)
         row = await repo.create_saved_plan(session, conversation_id, title, description, requirements, payload)

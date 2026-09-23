@@ -193,7 +193,7 @@ covers the failure mode a critic exists for. See [Travel Critic Agent (discarded
 
 ### Phase 10 — Observability, Evaluation & Release
 
-- [ ] Integrate LangSmith tracing
+- [x] Integrate LangSmith tracing
 - [ ] Create a representative evaluation dataset
 - [ ] Add automated evaluation of generated plans
 - [ ] Evaluate constraint satisfaction and recommendation quality
