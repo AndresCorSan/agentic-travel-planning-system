@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from app.core.dependencies import get_graph
 from app.agents.ai_models import light_llm
+from app.api.v1.titles import AUTO_TITLES, generate_title, has_title_context
 from app.agents.state import PlanItem, SINGLE_CHOICE_CATEGORIES
 from app.agents.tools.plan import plan_total
 from app.database.database import AsyncSessionLocal
@@ -270,9 +271,7 @@ async def _stream(graph, conversation_id: str, message: str):
     # Persist the user turn up-front so history survives mid-stream crashes.
     try:
         async with AsyncSessionLocal() as session:
-            conv = await repo.ensure_conversation(session, conversation_id)
-            if conv.title in ("New trip", "Untitled trip") and message.strip():
-                conv.title = message.strip()[:60]
+            await repo.ensure_conversation(session, conversation_id)
             await repo.add_message(session, conversation_id, "user", "text", message)
             await session.commit()
     except Exception:
@@ -280,6 +279,7 @@ async def _stream(graph, conversation_id: str, message: str):
     assistant_texts: list[str] = []
     assistant_cards: list[dict] = []
     agent_results: dict[str, str] = {}
+    title_event: dict | None = None
     try:
         state = await graph.aget_state(config)
         if state.interrupts:
@@ -459,9 +459,28 @@ async def _stream(graph, conversation_id: str, message: str):
                     )
                 for text in interrupt_texts:
                     await repo.add_message(session, conversation_id, "assistant", "text", text)
+                # Auto-title once: only while the title is still the
+                # default and the turn carries enough context. Manual
+                # renames leave the default set, so they are never
+                # overwritten. Failures keep the previous title.
+                title_event = None
+                try:
+                    conv = await repo.ensure_conversation(session, conversation_id)
+                    if conv.title in AUTO_TITLES:
+                        req = (final.values or {}).get("requirements")
+                        cands = (final.values or {}).get("destination_candidates") or []
+                        if has_title_context(message, req, cands):
+                            new_title = await generate_title(message, req, cands)
+                            if new_title:
+                                conv.title = new_title[:60]
+                                title_event = {"conversationId": conversation_id, "title": conv.title}
+                except Exception:
+                    title_event = None
                 await session.commit()
         except Exception:
             pass
+        if title_event is not None:
+            yield _frame("title.updated", title_event)
         yield "event: done\ndata: {}\n\n"
     except Exception as exc:
         if getattr(exc, "status_code", None) == 429 or "429" in str(exc):

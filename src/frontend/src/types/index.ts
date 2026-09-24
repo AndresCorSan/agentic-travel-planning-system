@@ -80,6 +80,7 @@ export type StreamEvent =
   | { type: 'plan.updated' } & PlanUpdate
   | { type: 'token'; text: string }
   | { type: 'message'; message: ChatMessage }
+  | { type: 'title.updated'; conversationId: string; title: string }
   | { type: 'done' }
   | { type: 'error'; message: string };
 

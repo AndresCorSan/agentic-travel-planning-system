@@ -245,15 +245,13 @@ export const useTravelStore = defineStore('travel', () => {
         for await (const ev of service.streamMessage(conversationId.value, text)) applyEvent(ev);
         streaming.value = null;
         keepPending = true;
-        // Keep the sidebar row fresh (backend auto-titles on first message).
+        // Keep the sidebar row fresh (the backend emits `title.updated`
+        // once light_llm has enough context — no eager first-message slice).
         if (BACKEND_MODE) {
           const library = useLibraryStore();
           const row = library.conversations.find((c) => c.id === conversationId.value);
           if (row) {
             row.updatedAt = 'just now';
-            if ((row.title === 'New trip' || row.title === 'Untitled trip') && text.trim()) {
-              row.title = text.trim().slice(0, 60);
-            }
           }
         }
       } else {
@@ -349,6 +347,15 @@ export const useTravelStore = defineStore('travel', () => {
         messageIds.value.push(ev.message.id);
         if (ev.message.role === 'assistant') attachPendingOptions(ev.message.id);
         break;
+      case 'title.updated': {
+        const library = useLibraryStore();
+        const row = library.conversations.find((c) => c.id === ev.conversationId);
+        if (row) {
+          row.title = ev.title;
+          row.updatedAt = 'just now';
+        }
+        break;
+      }
       case 'done':
         if (streaming.value) {
           if (pendingResults.length) {
