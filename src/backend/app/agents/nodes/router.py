@@ -14,6 +14,10 @@ Check the routes in this order and take the first one that fits.
 
 1. Set route="main_llm" when no specialist research is needed:
    - greetings, small talk, thanks, goodbyes
+   - messages outside what the app covers (anything not about travel
+     planning: e.g. coding, homework, general chit-chat topics) — the
+     assistant should briefly decline and steer back to travel, never
+     launch searches for these
    - stating a travel intent or naming a destination without requesting
      anything concrete yet — the assistant should acknowledge and ask what 
      to research next, not launch searches on its own
@@ -47,7 +51,9 @@ JEV_ROUTE_INSTRUCTIONS = (
 
 JEV_ROUTE_CRITERIA = {
     "main_llm": (
-        "greetings, small talk, thanks, goodbyes; merely mentioning a trip "
+        "greetings, small talk, thanks, goodbyes; messages outside travel "
+        "planning (coding, homework, or any non-travel topic) which the "
+        "assistant must briefly decline; merely mentioning a trip "
         "or destination in passing without asking for anything (no ideas, "
         "recommendations, or options requested); general information "
         "questions answerable from general knowledge or the current "
