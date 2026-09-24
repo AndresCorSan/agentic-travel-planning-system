@@ -1,5 +1,8 @@
 <!-- Scrollable message thread in the center of the chat view.
-     Only this column scrolls; auto-scrolls to bottom on new messages. -->
+     Only this column scrolls. Sending pins your bubble to the top with
+     room below for the reply (which eats that room as it streams in);
+     when the reply finishes the view drops to the bottom. Opening a
+     conversation with history simply starts at the bottom. -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import type { AgentRow, ChatMessage } from '../../types';
@@ -57,10 +60,13 @@ watch(
   () => props.loading,
   (v) => {
     if (v) {
+      if (lastIsUser.value) void scrollToUserTop();
       if (hasStreamingText.value) armStallTimer();
     } else {
       clearStallTimer();
       stalled.value = false;
+      // Reply finished: reveal the full answer at the bottom.
+      void scrollDown();
     }
   }
 );
@@ -70,13 +76,55 @@ const showStatus = computed(
   () => props.loading && (!props.messages.length || lastIsUser.value) && !hasStreamingText.value
 );
 
+// Elastic spacer under the just-sent user message: it always covers
+// exactly the gap between the real content below your bubble (status
+// block, streamed text, padding, ...) and one viewport, so the bubble
+// sits at the top with room below that the reply eats as it grows.
+// Stateless: the current spacer is subtracted arithmetically before
+// measuring, so no baseline snapshot is needed.
+const spacerPx = ref(0);
+const showReplySpacer = computed(() => props.loading && lastIsUser.value && props.messages.length > 0);
+
 async function scrollDown() {
   await nextTick();
   scroller.value?.scrollTo({ top: scroller.value.scrollHeight, behavior: 'smooth' });
 }
+// Refit the spacer; returns the last user bubble's top (content coords)
+// so callers can scroll to it, or null when there is nothing to fit.
+async function fitSpacer(): Promise<number | null> {
+  if (!showReplySpacer.value) return null;
+  await nextTick();
+  const el = scroller.value;
+  if (!el) return null;
+  const rows = el.querySelectorAll('.user-row');
+  const last = rows[rows.length - 1] as HTMLElement | undefined;
+  if (!last) return null;
+  const userTop = last.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop;
+  const below = el.scrollHeight - spacerPx.value - userTop;
+  spacerPx.value = Math.max(el.clientHeight - below - 16, 0);
+  return userTop;
+}
+// Anchor the last user bubble to the top of the viewport.
+async function scrollToUserTop() {
+  const userTop = await fitSpacer();
+  if (userTop !== null) scroller.value?.scrollTo({ top: userTop - 16, behavior: 'smooth' });
+}
 onMounted(scrollDown);
-// Multi-source watch avoids allocating an array on every trigger.
-watch([() => props.messages.length, () => props.loading, () => props.streaming?.text?.length ?? 0], scrollDown);
+// New user message while sending: pin it to the top (only for fresh
+// sends — history loads have loading == false and keep bottom scroll).
+watch(
+  () => props.messages.length,
+  () => {
+    if (props.loading && lastIsUser.value) void scrollToUserTop();
+  }
+);
+// Reply content growing (tokens, status block, agent rows): refit so the
+// text fills the reserved blank instead of extending the page. Floor of
+// 0: once the reply fills the viewport the view simply stays put until
+// the final scrollDown on completion.
+watch([() => props.streaming?.text?.length ?? 0, () => props.agents.length, () => props.statusText], () => {
+  void fitSpacer();
+});
 </script>
 
 <template>
@@ -96,6 +144,7 @@ watch([() => props.messages.length, () => props.loading, () => props.streaming?.
           @choose="(messageId, id, name) => emit('choose', messageId, id, name)"
         />
       </div>
+      <div v-if="showReplySpacer" class="reply-spacer" :style="{ height: spacerPx + 'px' }" />
       <div v-if="!messages.length && !loading" class="page-empty">
         <p>No messages yet. Describe your trip to get started.</p>
       </div>

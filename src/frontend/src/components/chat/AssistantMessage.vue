@@ -154,7 +154,7 @@ function onSave() {
    while (LLM thinking / tool calls): same look as AgentStatusBlock. */
 .busy-line {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 6px;
   margin-top: 10px;
   color: var(--p-surface-500);
