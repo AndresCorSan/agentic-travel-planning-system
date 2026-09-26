@@ -10,7 +10,7 @@ import ItineraryBlock from '../travel/ItineraryBlock.vue';
 import DestinationRecommendation from '../travel/DestinationRecommendation.vue';
 import TravelOptionCard from '../travel/TravelOptionCard.vue';
 import SubagentResults from './SubagentResults.vue';
-import MessageTime from './MessageTime.vue';
+import MessageMeta from './MessageMeta.vue';
 import { renderOptionGroups, renderRich } from './richtext';
 
 const props = defineProps<{ message: ChatMessage; chosenDestination: string | null; live?: boolean; busy?: boolean }>();
@@ -83,7 +83,7 @@ function onSave() {
       <TravelOptionCard v-else-if="message.kind === 'options'" />
       <BudgetSummary v-else-if="message.kind === 'budget'" />
       <ItineraryBlock v-else-if="message.kind === 'itinerary'" />
-      <MessageTime :value="message.createdAt" />
+      <MessageMeta :created-at="message.createdAt" :stats="message.stats" />
     </div>
   </div>
 </template>

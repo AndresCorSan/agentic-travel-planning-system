@@ -3,6 +3,7 @@ from langgraph.types import interrupt
 from pydantic import BaseModel
 from app.agents.ai_models import llm
 from app.agents.state import DestinationCandidate, TravelState
+from app.agents.usage import collect_usage
 from app.agents.utils import sanitize_messages_for_llm
 
 DESTINATION_RESEARCH_PROMPT = """
@@ -36,21 +37,28 @@ availability, or other precise future-dependent facts.
 class DestinationResearchResult(BaseModel):
     candidates: list[DestinationCandidate]
 
-destination_llm = llm.with_structured_output(DestinationResearchResult)
+destination_llm = llm.with_structured_output(
+    DestinationResearchResult,
+    # Raw response kept for turn usage stats; parse errors stay raising.
+    include_raw=True,
+)
 
 async def destination_research(state: TravelState):
     # TODO(phase8): replace print with structured logging (app.core.logging).
 
     requirements = state["requirements"]
 
-    response = await destination_llm.ainvoke([
+    result = await destination_llm.ainvoke([
         SystemMessage(content=DESTINATION_RESEARCH_PROMPT),
         SystemMessage(content=f"Current travel requirements:\n{requirements}"),
         *sanitize_messages_for_llm(state["messages"]),
     ])
+    if result.get("parsing_error") is not None:
+        raise result["parsing_error"]
 
     return {
-        "destination_candidates": response.candidates
+        "destination_candidates": result["parsed"].candidates,
+        "turn_usage": collect_usage([result["raw"]], "destination_research"),
     }
 
 # Protocol with the frontend (see ChatView.onChoose): the carousel Choose

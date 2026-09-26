@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from app.agents.ai_models import JEV_CONFIDENCE_THRESHOLD, decide_route_via_jev, light_llm
 from app.agents.state import TravelState
 from app.agents.tools.plan import SAVED_CHOICES_PREFIX
+from app.agents.usage import collect_usage
 from app.agents.utils import sanitize_messages_for_llm
 
 RESEARCH_ROUTER_PROMPT = """
@@ -72,7 +73,11 @@ JEV_ROUTE_CRITERIA = {
     ),
 }
 
-structured_router_llm = light_llm.with_structured_output(ResearchDecision)
+structured_router_llm = light_llm.with_structured_output(
+    ResearchDecision,
+    # Raw response kept for turn usage stats; parse errors stay raising.
+    include_raw=True,
+)
 
 async def research_router(state: TravelState):
     messages = state.get("messages") or []
@@ -103,12 +108,17 @@ async def research_router(state: TravelState):
             return {"next_step": choice}
 
     # Fallback: structured output from the chat LLM
-    response = await structured_router_llm.ainvoke([
+    result = await structured_router_llm.ainvoke([
         SystemMessage(content=RESEARCH_ROUTER_PROMPT),
         *sanitize_messages_for_llm(state["messages"]),
     ])
+    if result.get("parsing_error") is not None:
+        raise result["parsing_error"]
 
-    return {"next_step": response.route}
+    return {
+        "next_step": result["parsed"].route,
+        "turn_usage": collect_usage([result["raw"]], "router"),
+    }
 
 
 def route_next(state: TravelState):

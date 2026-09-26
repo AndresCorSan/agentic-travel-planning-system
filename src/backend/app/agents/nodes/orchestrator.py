@@ -1,9 +1,9 @@
-from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import SystemMessage
 from langgraph.types import Send
 import logging
 from app.agents.ai_models import llm
 from app.agents.state import OrchestrationPlan, TravelState
+from app.agents.usage import collect_usage
 from app.agents.utils import current_date_message, sanitize_messages_for_llm
 
 logger = logging.getLogger("uvicorn.error")
@@ -53,33 +53,40 @@ Do not omit known dates, locations, travelers, budget, or relevant constraints.
 Do not perform research yourself and do not invent requirements.
 """
 
-orchestrator_llm = llm.with_structured_output(OrchestrationPlan)
+orchestrator_llm = llm.with_structured_output(
+    OrchestrationPlan,
+    # Keep the raw response for usage stats; parse errors land in
+    # parsing_error instead of raising (same fallback as before).
+    include_raw=True,
+)
 
 async def orchestrator(state: TravelState):
     requirements = state["requirements"]
     agents = "\n".join(f"- {name}: {AGENT_DESCRIPTIONS[name]}" for name in AVAILABLE_AGENTS)
 
-    response = None
-    try:
-        response = await orchestrator_llm.ainvoke([
-            SystemMessage(content=ORCHESTRATOR_PROMPT_TEMPLATE.format(agents=agents)),
-            SystemMessage(
-                content=f"Current travel requirements:\n{requirements}"
-            ),
-            current_date_message(),
-            *sanitize_messages_for_llm(state["messages"]),
-        ])
-    except OutputParserException:
-        # The model may emit a tool call it saw in the conversation history
-        # (e.g. update_requirements) instead of the OrchestrationPlan schema.
-        # Same fallback as a conversational reply: nothing to delegate.
-        logger.warning("Orchestrator emitted invalid schema; delegating to main_llm", exc_info=True)
+    result = await orchestrator_llm.ainvoke([
+        SystemMessage(content=ORCHESTRATOR_PROMPT_TEMPLATE.format(agents=agents)),
+        SystemMessage(
+            content=f"Current travel requirements:\n{requirements}"
+        ),
+        current_date_message(),
+        *sanitize_messages_for_llm(state["messages"]),
+    ])
+    usage = collect_usage([result["raw"]], "orchestrator")
 
-    # The model may answer conversationally instead of emitting the schema;
-    # in that case there is nothing to delegate and main_llm takes over.
-    tasks = response.tasks if response is not None else []
+    # The model may emit a tool call it saw in the conversation history
+    # (e.g. update_requirements) instead of the OrchestrationPlan schema,
+    # or answer conversationally: in that case there is nothing to
+    # delegate and main_llm takes over.
+    parsed = result.get("parsed")
+    if result.get("parsing_error") is not None or parsed is None:
+        logger.warning("Orchestrator emitted invalid schema; delegating to main_llm")
+        tasks = []
+    else:
+        tasks = parsed.tasks
     return {
-        "orchestration_plan": tasks
+        "orchestration_plan": tasks,
+        "turn_usage": usage,
     }
 
 

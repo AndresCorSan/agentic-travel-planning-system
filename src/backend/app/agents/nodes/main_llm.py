@@ -3,6 +3,7 @@ from app.agents.ai_models import llm
 from app.agents.state import TravelState
 from app.agents.tools.plan import add_plan_item, present_options, remove_plan_item
 from app.agents.tools.requirements import update_requirements
+from app.agents.usage import collect_usage
 from app.agents.utils import current_date_message, sanitize_messages_for_llm
 
 MAIN_LLM_PROMPT = """
@@ -171,4 +172,7 @@ async def main_llm_node(state: TravelState) -> dict:
 
     response = await main_llm.ainvoke(messages)
 
-    return {"messages": [response]}
+    return {
+        "messages": [response],
+        "turn_usage": collect_usage([response], "main_llm"),
+    }

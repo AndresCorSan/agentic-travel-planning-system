@@ -347,6 +347,23 @@ export const useTravelStore = defineStore('travel', () => {
         messageIds.value.push(ev.message.id);
         if (ev.message.role === 'assistant') attachPendingOptions(ev.message.id);
         break;
+      case 'stats': {
+        // Turn usage (tokens/cost/duration): attach to the live bubble if
+        // still streaming, else to the latest assistant message already
+        // flushed to the cache (e.g. destination cards).
+        if (streaming.value) {
+          streaming.value = { ...streaming.value, stats: ev.stats };
+        } else {
+          for (let i = messageIds.value.length - 1; i >= 0; i--) {
+            const m = cache.value[messageIds.value[i]];
+            if (m?.role === 'assistant') {
+              cache.value[m.id] = { ...m, stats: ev.stats };
+              break;
+            }
+          }
+        }
+        break;
+      }
       case 'title.updated': {
         const library = useLibraryStore();
         const row = library.conversations.find((c) => c.id === ev.conversationId);

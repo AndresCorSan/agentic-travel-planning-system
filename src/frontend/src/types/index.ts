@@ -26,6 +26,20 @@ export interface ChatMessage {
       backend contract, which will serve payloads by id. */
   ref?: string;
   createdAt: string;
+  /** Turn-level LLM usage stats (backend `stats` event / payload). Present
+      on assistant messages created after the stats feature; absent on
+      older history and on user messages. */
+  stats?: MessageStats;
+}
+
+/** Token / cost / timing metadata for one assistant turn. */
+export interface MessageStats {
+  duration_s: number;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  cost_usd: number | null;
+  model: string | null;
 }
 
 /** One specialist subagent output attached to an assistant message. */
@@ -80,6 +94,7 @@ export type StreamEvent =
   | { type: 'plan.updated' } & PlanUpdate
   | { type: 'token'; text: string }
   | { type: 'message'; message: ChatMessage }
+  | { type: 'stats'; stats: MessageStats }
   | { type: 'title.updated'; conversationId: string; title: string }
   | { type: 'done' }
   | { type: 'error'; message: string };

@@ -2,6 +2,7 @@ from langchain_core.messages import SystemMessage
 from langgraph.prebuilt import ToolNode
 from app.agents.ai_models import subagent_llm
 from app.agents.subagents._base import SubagentState, build_subagent_graph
+from app.agents.usage import collect_usage
 from app.agents.utils import current_date_message, sanitize_messages_for_llm
 
 from app.agents.utils import sanitize_messages_for_llm
@@ -72,7 +73,8 @@ def build_transportation_subgraph(trvl_tool):
         })
 
         return {
-            "transportation_results": [result["result"]]
+            "transportation_results": [result["result"]],
+            "turn_usage": collect_usage(result["messages"], "transportation_agent"),
         }
 
     return run_transportation_agent

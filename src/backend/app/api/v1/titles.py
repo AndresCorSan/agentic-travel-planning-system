@@ -10,6 +10,7 @@ import json
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.ai_models import light_llm
+from app.agents.usage import message_usage
 
 AUTO_TITLES = ("New trip", "Untitled trip")
 
@@ -44,8 +45,12 @@ def has_title_context(message: str, requirements, candidates) -> bool:
     return True
 
 
-async def generate_title(message: str, requirements, candidates) -> str | None:
-    """Ask light_llm for a short conversation title."""
+async def generate_title(message: str, requirements, candidates) -> tuple[str | None, dict | None]:
+    """Ask light_llm for a short conversation title.
+
+    Returns (title, usage_entry) so the caller can fold this call into
+    the turn's stats. Any failure returns (None, None).
+    """
     try:
         lines = [f"Last user message: {message.strip()[:500]}"]
         if requirements is not None:
@@ -66,11 +71,12 @@ async def generate_title(message: str, requirements, candidates) -> str | None:
             SystemMessage(content=TITLE_SYSTEM_PROMPT),
             HumanMessage(content="\n".join(lines)),
         ])
+        usage = message_usage(msg, "title")
         title = str(getattr(msg, "content", "") or "").strip().strip("\"'“”‘’").strip()
         if not title or len(title) > 60:
             title = title[:60].strip()
         if not title:
-            return None
-        return title
+            return None, usage
+        return title, usage
     except Exception:
-        return None
+        return None, None

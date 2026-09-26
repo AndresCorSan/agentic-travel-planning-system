@@ -155,3 +155,10 @@ class TravelState(TypedDict):
     # Selectable options per category + the user's saved trip plan
     available_options: Annotated[dict, _merge_options]
     trip_plan: list[PlanItem]
+
+    # One usage entry per LLM call in the turn (see `usage.py`). Needed
+    # because structured outputs and subagents leave no AIMessage in
+    # `messages`. Entry: {node, model, input_tokens, output_tokens,
+    # total_tokens, cost_usd}. Grows across turns; `conversations._stream`
+    # slices from a snapshot length and aggregates with `sum_entries`.
+    turn_usage: Annotated[list, add]

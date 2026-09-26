@@ -122,14 +122,15 @@ def test_jev_low_confidence_falls_back_to_llm(monkeypatch):
         return ("orchestrator", 0.1)
 
     async def fake_llm(*args, **kwargs):
-        return SimpleNamespace(route="main_llm")
+        # include_raw=True contract: raw/parsed/parsing_error dict.
+        return {"raw": None, "parsed": SimpleNamespace(route="main_llm"), "parsing_error": None}
 
     monkeypatch.setattr(router_mod, "decide_route_via_jev", fake_jev)
     monkeypatch.setattr(
         router_mod, "structured_router_llm", SimpleNamespace(ainvoke=fake_llm)
     )
     result = asyncio.run(research_router(_state("hi there")))
-    assert result == {"next_step": "main_llm"}
+    assert result == {"next_step": "main_llm", "turn_usage": []}
 
 
 def test_jev_error_falls_back_to_llm(monkeypatch):
@@ -139,11 +140,12 @@ def test_jev_error_falls_back_to_llm(monkeypatch):
         return None
 
     async def fake_llm(*args, **kwargs):
-        return SimpleNamespace(route="destination_research")
+        # include_raw=True contract: raw/parsed/parsing_error dict.
+        return {"raw": None, "parsed": SimpleNamespace(route="destination_research"), "parsing_error": None}
 
     monkeypatch.setattr(router_mod, "decide_route_via_jev", fake_jev)
     monkeypatch.setattr(
         router_mod, "structured_router_llm", SimpleNamespace(ainvoke=fake_llm)
     )
     result = asyncio.run(research_router(_state("Paris or Rome, which to pick?")))
-    assert result == {"next_step": "destination_research"}
+    assert result == {"next_step": "destination_research", "turn_usage": []}

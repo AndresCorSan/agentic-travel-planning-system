@@ -2,6 +2,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from app.agents.ai_models import low_reasoning_llm
 from app.agents.state import TravelRequirements, TravelState
 from app.agents.tools.plan import SAVED_CHOICES_PREFIX
+from app.agents.usage import collect_usage
 from app.agents.utils import current_date_message, sanitize_messages_for_llm
 
 REQUIREMENTS_EXTRACTION_PROMPT = """
@@ -34,8 +35,11 @@ even if all fields are empty.
 """
 
 requirements_llm = low_reasoning_llm.with_structured_output(
-    TravelRequirements
+    TravelRequirements,
+    # Keep the raw response for turn usage stats; parse errors still raise.
+    include_raw=True,
 )
+
 
 async def extract_requirements(state: TravelState):
     messages = state.get("messages") or []
@@ -43,10 +47,15 @@ async def extract_requirements(state: TravelState):
     # updated the plan deterministically: skip the LLM call entirely.
     if messages and isinstance(messages[-1], HumanMessage) and str(messages[-1].content or "").startswith(SAVED_CHOICES_PREFIX):
         return {}
-    response = await requirements_llm.ainvoke([
+    result = await requirements_llm.ainvoke([
         SystemMessage(content=REQUIREMENTS_EXTRACTION_PROMPT),
         current_date_message(),
         *sanitize_messages_for_llm(state["messages"]),
     ])
+    if result.get("parsing_error") is not None:
+        raise result["parsing_error"]
 
-    return {"requirements": response}
+    return {
+        "requirements": result["parsed"],
+        "turn_usage": collect_usage([result["raw"]], "extract_requirements"),
+    }

@@ -1,4 +1,5 @@
 import json
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -12,6 +13,7 @@ from app.core.dependencies import get_graph
 from app.agents.ai_models import light_llm
 from app.api.v1.titles import AUTO_TITLES, generate_title, has_title_context
 from app.agents.state import PlanItem, SINGLE_CHOICE_CATEGORIES
+from app.agents.usage import sum_entries, sum_turn_usage
 from app.agents.tools.plan import plan_total
 from app.database.database import AsyncSessionLocal
 from app.database import repositories as repo
@@ -280,8 +282,13 @@ async def _stream(graph, conversation_id: str, message: str):
     assistant_cards: list[dict] = []
     agent_results: dict[str, str] = {}
     title_event: dict | None = None
+    t0 = time.monotonic()
     try:
         state = await graph.aget_state(config)
+        # Message/usage counts before the turn: only entries appended after
+        # these indexes belong to this turn's stats.
+        prev_len = len((state.values or {}).get("messages") or [])
+        prev_usage_len = len((state.values or {}).get("turn_usage") or [])
         if state.interrupts:
             stream_input = Command(resume=message)
         else:
@@ -412,6 +419,51 @@ async def _stream(graph, conversation_id: str, message: str):
                             agent_results[node] = result_text
                             yield _frame("agent.result", {"id": node, "text": result_text})
         final = await graph.aget_state(config)
+        # Turn usage stats, aggregated with `usage.sum_entries` over the
+        # turn's slice of the `turn_usage` channel (see `state.py`).
+        # Best-effort: stats is None when nothing measurable happened.
+        stats: dict | None = None
+        try:
+            values = final.values or {}
+            entries = list(values.get("turn_usage") or [])[prev_usage_len:]
+            # Auto-title once (default title + enough context only; manual
+            # renames are never overwritten). Runs before stats so its
+            # spend folds into the turn total.
+            try:
+                async with AsyncSessionLocal() as session:
+                    conv = await repo.ensure_conversation(session, conversation_id)
+                    if conv.title in AUTO_TITLES:
+                        req = values.get("requirements")
+                        cands = values.get("destination_candidates") or []
+                        if has_title_context(message, req, cands):
+                            new_title, title_usage = await generate_title(message, req, cands)
+                            if title_usage is not None:
+                                entries.append(title_usage)
+                            if new_title:
+                                conv.title = new_title[:60]
+                                title_event = {"conversationId": conversation_id, "title": conv.title}
+                    await session.commit()
+            except Exception:
+                title_event = None
+            if not entries:
+                # No node reported usage: fall back to message-carried usage
+                # (a turn with zero LLM calls simply yields no stats).
+                all_msgs = values.get("messages") or []
+                usage = sum_turn_usage(list(all_msgs)[prev_len:])
+            else:
+                usage = sum_entries(entries)
+            cost = usage.get("cost_usd")
+            if usage.get("total_tokens") or usage.get("model") or cost is not None:
+                stats = {
+                    "duration_s": round(time.monotonic() - t0, 1),
+                    "input_tokens": usage.get("input_tokens", 0),
+                    "output_tokens": usage.get("output_tokens", 0),
+                    "total_tokens": usage.get("total_tokens", 0),
+                    "cost_usd": cost,
+                    "model": usage.get("model"),
+                }
+        except Exception:
+            stats = None
         req = (final.values or {}).get("requirements")
         if req is not None:
             yield _frame("requirements.updated", {"requirements": _requirements_to_items(req)})
@@ -430,9 +482,12 @@ async def _stream(graph, conversation_id: str, message: str):
                             "kind": "text",
                             "text": interrupt.value,
                             "createdAt": datetime.now(timezone.utc).isoformat(),
+                            **({"stats": stats} if stats else {}),
                         }
                     },
                 )
+        if stats:
+            yield _frame("stats", {"stats": stats})
         # Persist the assistant turn (text + destination cards + interrupts).
         # Subagent outputs ride along as the message payload so the
         # accordions rehydrate exactly as they streamed.
@@ -441,41 +496,43 @@ async def _stream(graph, conversation_id: str, message: str):
                 await repo.ensure_conversation(session, conversation_id)
                 results = [{"id": nid, "text": text} for nid, text in agent_results.items()]
                 full_text = "".join(assistant_texts).strip()
+
+                def _payload(extra: dict | None = None) -> dict | None:
+                    base: dict = {}
+                    if results:
+                        base["subagentResults"] = results
+                    if stats:
+                        base["stats"] = stats
+                    if extra:
+                        base.update(extra)
+                    return base or None
+
                 if full_text:
                     await repo.add_message(
                         session, conversation_id, "assistant", "text", full_text,
-                        {"subagentResults": results} if results else None,
+                        _payload(),
                     )
-                elif results:
+                elif results or stats:
                     await repo.add_message(
                         session, conversation_id, "assistant", "text", "",
-                        {"subagentResults": results},
+                        _payload(),
                     )
                 for card in assistant_cards:
                     await repo.add_message(
                         session, conversation_id, "assistant", "destinations",
                         "Here are my top picks — choose one or tell me what to adjust.",
-                        card,
+                        _payload(card),
                     )
                 for text in interrupt_texts:
-                    await repo.add_message(session, conversation_id, "assistant", "text", text)
-                # Auto-title once: only while the title is still the
-                # default and the turn carries enough context. Manual
-                # renames leave the default set, so they are never
-                # overwritten. Failures keep the previous title.
-                title_event = None
-                try:
+                    await repo.add_message(
+                        session, conversation_id, "assistant", "text", text, _payload()
+                    )
+                # The auto-title above is already folded into stats; apply it
+                # here unless someone renamed the conversation in between.
+                if title_event is not None:
                     conv = await repo.ensure_conversation(session, conversation_id)
-                    if conv.title in AUTO_TITLES:
-                        req = (final.values or {}).get("requirements")
-                        cands = (final.values or {}).get("destination_candidates") or []
-                        if has_title_context(message, req, cands):
-                            new_title = await generate_title(message, req, cands)
-                            if new_title:
-                                conv.title = new_title[:60]
-                                title_event = {"conversationId": conversation_id, "title": conv.title}
-                except Exception:
-                    title_event = None
+                    if conv.title in AUTO_TITLES or conv.title == title_event["title"]:
+                        conv.title = title_event["title"][:60]
                 await session.commit()
         except Exception:
             pass
@@ -597,6 +654,8 @@ def _stored_to_chat(msg) -> dict:
             for r in msg.payload["subagentResults"]
             if isinstance(r, dict)
         ]
+    if isinstance(msg.payload, dict) and isinstance(msg.payload.get("stats"), dict):
+        out["stats"] = msg.payload["stats"]
     return out
 
 
