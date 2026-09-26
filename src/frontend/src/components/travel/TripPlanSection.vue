@@ -73,6 +73,11 @@ const barPct = computed(() => {
   if (!props.budget) return 0;
   return Math.min(100, Math.round((props.total / props.budget) * 100));
 });
+// Items without a known price: the total below is partial until they
+// are priced. Listed in the footnote tooltip by label.
+const unpricedItems = computed(() =>
+  props.items.filter((i) => i.price === null || i.price === undefined)
+);
 
 // Category -> inline SVG badge icon (category name stays out of the text:
 // the icon says what it is, the subtitle carries dates/details).
@@ -91,10 +96,27 @@ const iconFor = (category: string) => CATEGORY_ICONS[category] ?? CATEGORY_ICONS
 // Display order: outbound transportation, accommodation, rental car,
 // activities, then the remaining transportation legs (return...).
 // Within the same slot, save order is preserved (stable sort).
-const OUTBOUND_GROUPS = ['', 'outbound', 'outward', 'departure'];
+// Group names come from the LLM ("outbound", "outbound leg 1", ...),
+// so outbound is matched by prefix, not by exact string.
+const OUTBOUND_PREFIXES = ['outbound', 'outward', 'departure'];
+const RETURN_PREFIXES = ['return', 'inbound', 'homeward'];
+function startsWithWord(text: string, prefix: string): boolean {
+  return (
+    text === prefix ||
+    text.startsWith(prefix + ' ') ||
+    text.startsWith(prefix + '_') ||
+    text.startsWith(prefix + '-')
+  );
+}
+function isOutboundGroup(group: string): boolean {
+  const g = (group ?? '').trim().toLowerCase();
+  if (!g) return true;
+  if (RETURN_PREFIXES.some((p) => startsWithWord(g, p))) return false;
+  return OUTBOUND_PREFIXES.some((p) => startsWithWord(g, p));
+}
 function planRank(item: PlanItem): [number, string] {
   const group = (item.group ?? '').trim().toLowerCase();
-  if (item.category === 'transportation' && !OUTBOUND_GROUPS.includes(group)) return [4, group];
+  if (item.category === 'transportation' && !isOutboundGroup(item.group ?? '')) return [4, group];
   switch (item.category) {
     case 'transportation': return [0, group];
     case 'accommodation': return [1, ''];
@@ -130,8 +152,14 @@ const sortedItems = computed(() =>
     </div>
     <div v-if="items.length" class="row total">
       <span>Total</span>
-      <strong>{{ formatMoney(total) }} <span v-if="budget !== null" class="muted">of {{ formatMoney(budget) }}</span></strong>
+      <strong>{{ formatMoney(total) }}<template v-if="unpricedItems.length"> *</template> <span v-if="budget !== null" class="muted">of {{ formatMoney(budget) }}</span></strong>
     </div>
+    <p v-if="unpricedItems.length" class="footnote">* Excludes {{ unpricedItems.length }} item<template v-if="unpricedItems.length !== 1">s</template> with unknown price
+      <span class="tip" tabindex="0" aria-label="Items with unknown price">
+        <i class="pi pi-info-circle" />
+        <span class="tipbox" role="tooltip"><b>Unknown price</b><span v-for="u in unpricedItems" :key="`${u.category}:${u.option_id}`" class="tipitem">{{ u.label }}</span></span>
+      </span>
+    </p>
     <div v-if="items.length && budget !== null" class="pbar" :class="{ over: overBudget }">
       <i :style="{ width: barPct + '%' }" />
     </div>
@@ -170,6 +198,75 @@ const sortedItems = computed(() =>
   margin-top: 6px;
   padding-top: 8px;
   border-top: 1px solid var(--p-surface-200);
+}
+.footnote {
+  margin: 2px 0 6px;
+  font-size: 0.75rem;
+  color: var(--p-surface-500);
+}
+.footnote i {
+  font-size: 0.72rem;
+  vertical-align: -1px;
+  cursor: help;
+}
+/* Custom tooltip (one row per unpriced item): dark card opening upwards,
+   shown on hover or keyboard focus. Fixed colors so it reads well in
+   both light and dark mode. */
+.tip {
+  position: relative;
+  display: inline-block;
+  outline: none;
+}
+.tipbox {
+  display: none;
+  position: absolute;
+  right: -6px;
+  bottom: calc(100% + 8px);
+  min-width: 190px;
+  max-width: 250px;
+  background: #1c2029;
+  color: #eef0f4;
+  border: 1px solid #2f3541;
+  border-radius: 9px;
+  padding: 8px 12px 10px;
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.45;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.3);
+  z-index: 50;
+  white-space: normal;
+  cursor: default;
+}
+.tipbox::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  right: 12px;
+  border: 6px solid transparent;
+  border-top-color: #1c2029;
+}
+.tip:hover .tipbox,
+.tip:focus-within .tipbox {
+  display: block;
+}
+.tipbox b {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+.tipitem {
+  display: block;
+  padding-left: 12px;
+  position: relative;
+}
+.tipitem::before {
+  content: "•";
+  position: absolute;
+  left: 2px;
+  color: var(--p-primary-500);
 }
 .tl {
   position: relative;
