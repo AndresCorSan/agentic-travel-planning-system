@@ -5,7 +5,7 @@ import Button from 'primevue/button';
 import Textarea from 'primevue/textarea';
 import { nextTick, ref, watch } from 'vue';
 
-const props = defineProps<{ loading: boolean }>();
+const props = defineProps<{ loading: boolean; draftOverride?: string }>();
 const emit = defineEmits<{ send: [text: string] }>();
 
 // PrimeVue auto-resize grows but doesn't reliably shrink back:
@@ -23,6 +23,16 @@ async function fit() {
   el.style.overflowY = el.scrollHeight > MAX_HEIGHT ? 'auto' : 'hidden';
 }
 watch(draft, fit);
+// Suggestion clicks from the welcome hero fill the composer for editing.
+watch(
+  () => props.draftOverride,
+  (v) => {
+    if (v === undefined) return;
+    draft.value = v;
+    void fit();
+    nextTick(() => area.value?.$el?.focus());
+  }
+);
 
 function submit() {
   const t = draft.value.trim();

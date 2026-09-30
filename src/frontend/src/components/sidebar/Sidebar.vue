@@ -12,6 +12,7 @@ import { useToast } from 'primevue/usetoast';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useLocalStorageToggle } from '../../composables/useLocalStorageToggle';
+import { createConversationId } from '../../api/travelService';
 import { useLibraryStore, useTravelStore } from '../../stores/travel';
 import { useUiStore } from '../../stores/ui';
 import { formatUpdatedAt } from '../../utils/datetime';
@@ -36,7 +37,7 @@ const [convOpen, toggleConv] = useLocalStorageToggle('sidebar-conv-open');
 const [plansOpen, togglePlans] = useLocalStorageToggle('sidebar-plans-open');
 
 onMounted(() => {
-  if (!library.conversations.length) void library.load();
+  if (!library.loaded) void library.load();
 });
 
 const activeTrip = computed(() => (route.name === 'trip' ? String(route.params.id) : null));
@@ -64,9 +65,11 @@ function newTrip() {
     notifyLocked();
     return;
   }
-  const c = library.addConversation('Untitled trip');
+  // Fresh thread without storing anything: rows are created on first send,
+  // so empty trips leave no trace.
+  const id = createConversationId();
   ui.navOpen = false;
-  void router.push(`/trip/${c.id}`);
+  void router.push(`/trip/${id}`);
 }
 function openTrip(id: string) {
   if (navLocked.value && id !== activeTrip.value) {

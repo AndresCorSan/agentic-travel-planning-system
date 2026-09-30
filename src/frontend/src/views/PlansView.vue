@@ -3,13 +3,14 @@
 import Button from 'primevue/button';
 import { onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { createConversationId } from '../api/travelService';
 import { useLibraryStore } from '../stores/travel';
 
 const library = useLibraryStore();
 const router = useRouter();
 
 onMounted(() => {
-  if (!library.plans.length) void library.load();
+  if (!library.loaded) void library.load();
 });
 
 function subtitle(p: { destination: string; dates: string }): string {
@@ -24,7 +25,7 @@ function subtitle(p: { destination: string; dates: string }): string {
         <h1>Saved plans</h1>
         <p class="muted">Snapshots of your conversations, ready to revisit.</p>
       </div>
-      <Button label="New trip" icon="pi pi-plus" @click="router.push('/trip/lisbon-trip')" />
+      <Button label="New trip" icon="pi pi-plus" @click="router.push(`/trip/${createConversationId()}`)" />
     </div>
     <div v-if="!library.plans.length" class="empty">
       <b>No saved plans yet</b>

@@ -145,9 +145,6 @@ watch([() => props.streaming?.text?.length ?? 0, () => props.agents.length, () =
         />
       </div>
       <div v-if="showReplySpacer" class="reply-spacer" :style="{ height: spacerPx + 'px' }" />
-      <div v-if="!messages.length && !loading" class="page-empty">
-        <p>No messages yet. Describe your trip to get started.</p>
-      </div>
     </div>
   </div>
 </template>

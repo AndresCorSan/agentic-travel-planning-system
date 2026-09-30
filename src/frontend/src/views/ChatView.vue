@@ -3,10 +3,11 @@
      narrow screens). -->
 <script setup lang="ts">
 import Drawer from 'primevue/drawer';
-import { computed, onMounted, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import ChatComposer from '../components/chat/ChatComposer.vue';
 import ChatHeader from '../components/chat/ChatHeader.vue';
 import MessageList from '../components/chat/MessageList.vue';
+import WelcomeHero from '../components/chat/WelcomeHero.vue';
 import TravelStatePanel from '../components/state/TravelStatePanel.vue';
 import { useLibraryStore, useTravelStore } from '../stores/travel';
 import { useUiStore } from '../stores/ui';
@@ -18,9 +19,22 @@ const library = useLibraryStore();
 const ui = useUiStore();
 
 const chosenDestination = computed(() => travel.requirements.find((r) => r.key === 'destination')?.value ?? null);
+// Fresh thread (no stored row): show the hero instantly, even mid-rehydrate.
+// Otherwise the AI status block flashes before the hero appears.
+const isFreshTrip = computed(() => library.loaded && !library.conversations.some((c) => c.id === props.id));
+const showWelcome = computed(() => isFreshTrip.value && !travel.messages.length && !travel.streaming);
+// Suggestion clicks fill the composer for editing before sending.
+const composerDraft = ref('');
+async function onSuggestion(text: string) {
+  // Bounce through empty so clicking the same suggestion twice still refires
+  // the composer's draft watcher (it only reacts to value changes).
+  composerDraft.value = '';
+  await nextTick();
+  composerDraft.value = text;
+}
 
 async function load(id: string) {
-  if (!library.conversations.length) await library.load();
+  if (!library.loaded) await library.load();
   const conv = library.conversations.find((c) => c.id === id);
   // Unknown id (e.g. fresh mock trip): load an empty thread under that id.
   await travel.loadConversation(conv?.id ?? id, conv?.messageIds ?? []);
@@ -51,7 +65,9 @@ function onChoose(messageId: string, id: string, name: string) {
     <ChatHeader :conversation-id="props.id" />
     <div class="chat-body">
       <div class="chat-main">
+        <WelcomeHero v-if="showWelcome" @select="onSuggestion" />
         <MessageList
+          v-else
           :messages="travel.messages"
           :loading="travel.loading"
           :status-text="travel.streamStatus"
@@ -60,7 +76,7 @@ function onChoose(messageId: string, id: string, name: string) {
           :chosen-destination="chosenDestination"
           @choose="onChoose"
         />
-        <ChatComposer :loading="travel.loading" @send="onSend" />
+        <ChatComposer :loading="travel.loading" :draft-override="composerDraft" @send="onSend" />
       </div>
       <div class="state-wrap" :class="{ collapsed: ui.statePanelCollapsed }">
         <button

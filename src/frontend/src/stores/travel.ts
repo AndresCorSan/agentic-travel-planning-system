@@ -228,6 +228,12 @@ export const useTravelStore = defineStore('travel', () => {
   }
 
   async function send(text: string) {
+    // Lazy creation: the sidebar row appears with the first message (the
+    // backend ensures its own row too), so empty trips are never stored.
+    const library = useLibraryStore();
+    if (!library.conversations.some((c) => c.id === conversationId.value)) {
+      library.addConversation('Untitled trip', conversationId.value);
+    }
     const pending = service.createPendingUser(text);
     cache.value[pending.id] = pending;
     messageIds.value.push(pending.id);
@@ -248,7 +254,6 @@ export const useTravelStore = defineStore('travel', () => {
         // Keep the sidebar row fresh (the backend emits `title.updated`
         // once light_llm has enough context — no eager first-message slice).
         if (BACKEND_MODE) {
-          const library = useLibraryStore();
           const row = library.conversations.find((c) => c.id === conversationId.value);
           if (row) {
             row.updatedAt = 'just now';
@@ -408,10 +413,18 @@ export const useLibraryStore = defineStore('library', () => {
   const BACKEND_MODE = import.meta.env.VITE_USE_BACKEND === 'true';
   const conversations = ref<Conversation[]>([]);
   const plans = ref<SavedPlan[]>([]);
+  const loaded = ref(false);
+  // Shared in-flight request: Sidebar and ChatView both call load() on cold
+  // start — the second caller awaits the same request instead of refetching.
+  let loadInflight: Promise<void> | null = null;
 
   async function load() {
-    conversations.value = await service.listConversations();
-    plans.value = await service.listSavedPlans();
+    loadInflight ??= (async () => {
+      conversations.value = await service.listConversations();
+      plans.value = await service.listSavedPlans();
+      loaded.value = true;
+    })();
+    await loadInflight;
   }
   function renameConversation(id: string, title: string) {
     const c = conversations.value.find((c) => c.id === id);
@@ -434,17 +447,18 @@ export const useLibraryStore = defineStore('library', () => {
     plans.value = plans.value.filter((p) => p.id !== id);
     if (BACKEND_MODE) void service.deletePlanRemote(id);
   }
-  function addConversation(title: string): Conversation {
+  function addConversation(title: string, id?: string): Conversation {
     const c: Conversation = {
-      id: `trip-${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`,
+      id: id ?? service.createConversationId(),
       title,
       updatedAt: 'just now',
       messageIds: []
     };
     conversations.value.unshift(c);
-    if (BACKEND_MODE) void service.createConversation(c.id, title);
+    // Local-only: the backend row is created lazily via ensure_conversation
+    // on the first streamed message, so empty trips are never persisted.
     return c;
   }
 
-  return { conversations, plans, load, renameConversation, deleteConversation, renamePlan, deletePlan, addConversation, addPlan };
+  return { conversations, plans, loaded, load, renameConversation, deleteConversation, renamePlan, deletePlan, addConversation, addPlan };
 });

@@ -71,15 +71,10 @@ export async function listConversations(): Promise<Conversation[]> {
   return [...conversations];
 }
 
-/** Create a conversation (backend persists it; id is client-generated so the
-    sidebar can navigate synchronously). */
-export async function createConversation(id: string, title: string): Promise<void> {
-  if (import.meta.env.VITE_USE_BACKEND !== 'true') return;
-  try {
-    await api.post('/conversations', { id, title });
-  } catch {
-    // Optimistic local row stays; the backend ensures it on first message.
-  }
+/** Client-generated conversation id so the sidebar can navigate synchronously
+    before the backend row exists (it is created lazily on the first message). */
+export function createConversationId(): string {
+  return `trip-${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`;
 }
 
 /** Stored message history for rehydrating the thread after a reload. */
