@@ -2,7 +2,6 @@
      row per invoked subagent (spinner while active, tick when done). -->
 <script setup lang="ts">
 import { computed } from 'vue';
-import ProgressSpinner from 'primevue/progressspinner';
 import type { AgentRow } from '../../types';
 
 const props = defineProps<{ status: string; agents: AgentRow[] }>();
@@ -22,7 +21,7 @@ const cleanStatus = computed(() => props.status.replace(/(\u2026|\.{3})\s*$/, ''
       </span>
       <ul v-if="agents.length" class="agent-list">
         <li v-for="a in agents" :key="a.id" class="agent-row">
-          <ProgressSpinner v-if="a.state === 'active'" stroke-width="5" class="spin" />
+          <span v-if="a.state === 'active'" class="load-tail load-tail--accent" aria-hidden="true" />
           <i v-else class="pi pi-check-circle ok" />
           <span>{{ a.label }}</span>
         </li>
@@ -82,13 +81,6 @@ const cleanStatus = computed(() => props.status.replace(/(\u2026|\.{3})\s*$/, ''
   align-items: center;
   gap: 10px;
   color: inherit;
-}
-.spin {
-  width: 18px;
-  height: 18px;
-  /* PrimeVue centers the spinner with margin auto: force left alignment. */
-  margin: 0;
-  flex-shrink: 0;
 }
 .ok {
   color: var(--p-green-500);

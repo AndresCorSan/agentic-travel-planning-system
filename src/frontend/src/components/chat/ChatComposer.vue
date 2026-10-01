@@ -54,14 +54,15 @@ function submit() {
         @keydown.enter.exact.prevent="submit()"
       />
       <Button
-        icon="pi pi-send"
+        :icon="loading ? undefined : 'pi pi-send'"
         rounded
         class="send-btn"
-        :loading="loading"
         :disabled="!draft.trim() || loading"
         aria-label="Send message"
         @click="submit()"
-      />
+      >
+        <span v-if="loading" class="load-tail load-tail--on-accent" aria-hidden="true" />
+      </Button>
     </div>
   </div>
 </template>
