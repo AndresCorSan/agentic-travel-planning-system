@@ -111,10 +111,17 @@ function submit() {
   border: 0;
   box-shadow: none;
 }
-/* Keep the button bottom-anchored when the textarea grows multiline. */
+/* Keep the button bottom-anchored when the textarea grows multiline.
+   Fixed square so it stays a circle with either content: the pi-send
+   glyph (~16px) and the 20px loading spinner would otherwise give the
+   button different widths and the accent pill would stretch oval. */
 .send-btn {
   align-self: flex-end;
   flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  justify-content: center;
 }
 /* pi-send glyph carries asymmetric bearings: nudge down-left to center. */
 .send-btn :deep(.pi-send) {

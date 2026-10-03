@@ -383,8 +383,9 @@ a:hover {
    accent picker keeps working.
 ------------------------------------------------------------------- */
 .load-tail {
+  display: inline-block;
   border-radius: 50%;
-  flex-shrink: 0;
+  flex: none;
   animation: load-tail-spin 0.9s linear infinite;
 }
 .load-tail--on-accent {
