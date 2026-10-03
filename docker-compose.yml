@@ -1,0 +1,32 @@
+# Local deployment. Frontend on :8080 (npm run dev keeps :5173).
+# Secrets come from the root .env (gitignored, never committed).
+# SQLite files live in the backend-data volume (survives `down`, reset with `down -v`).
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: src/backend/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      CORS_ORIGINS: "http://localhost:5173,http://localhost:8080"
+    volumes:
+      - backend-data:/app/src/backend/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./src/frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:8000/api/v1
+        VITE_USE_BACKEND: "true"
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  backend-data:

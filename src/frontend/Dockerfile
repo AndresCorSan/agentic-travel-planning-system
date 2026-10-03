@@ -1,0 +1,19 @@
+# syntax=docker/dockerfile:1
+# Stage 1: build the Vite SPA. VITE_* vars are baked at build time.
+FROM node:22-alpine AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . ./
+ARG VITE_API_BASE_URL=http://localhost:8000/api/v1
+ARG VITE_USE_BACKEND=true
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL} \
+    VITE_USE_BACKEND=${VITE_USE_BACKEND}
+RUN npm run build
+
+# Stage 2: serve dist/ with nginx (SPA fallback included).
+FROM nginx:alpine
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

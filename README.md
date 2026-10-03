@@ -64,6 +64,76 @@ The user can then change a requirement, for example:
 The system can use the existing travel state and replan rather than
 starting from scratch.
 
+## Getting Started
+
+### Prerequisites
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+  (or Docker Engine + Compose v2) — for the recommended Docker setup.
+- An [OpenRouter](https://openrouter.com/) API key — the planner LLM
+  runs through OpenRouter (`xiaomi/mimo-v2.5`). No other keys are
+  required: weather, flights/hotels, activities, and rental cars come
+  from MCP servers that need no personal credentials.
+
+### 1. Configure secrets
+
+Create a `.env` file in the repository root (it is gitignored, never
+committed):
+
+``` text
+OPENROUTER_API_KEY=sk-or-v1-...
+```
+
+Optional variables (also read from the same `.env`):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `CORS_ORIGINS` | `http://localhost:5173,http://localhost:8080` | Browsers allowed to call the API |
+| `LIGHT_LLM_FALLBACKS` | — | Fallback models for the light LLM |
+| `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_ENDPOINT`, `LANGSMITH_PROJECT` | — | LangSmith tracing |
+
+### 2. Run with Docker (recommended)
+
+``` bash
+docker compose up --build
+```
+
+- App: <http://localhost:8080>
+- API: <http://localhost:8000/api/v1> (interactive docs at
+  <http://localhost:8000/docs>)
+
+Notes:
+
+- First backend startup takes ~30s: it downloads the weather MCP via
+  `npx` and loads tools from all four MCP servers. Watch for
+  `MCP tools ready` + `Graph built: 14 nodes` in `docker compose logs backend`.
+- Conversations and LangGraph checkpoints persist in the
+  `backend-data` volume, so they survive `down`/`up`. Run
+  `docker compose down -v` for a clean slate.
+- The frontend talks to `http://localhost:8000/api/v1` (baked in at
+  image build time). To point it elsewhere, rebuild with
+  `--build-arg VITE_API_BASE_URL=...`.
+
+### 3. Or run locally (development)
+
+Backend (from `src/backend`, so `app.*` imports resolve):
+
+``` bash
+uv run uvicorn app.main:app --port 8000
+```
+
+Frontend (from `src/frontend`):
+
+``` bash
+cp .env.example .env   # VITE_API_BASE_URL=http://localhost:8000/api/v1, VITE_USE_BACKEND=true
+npm install
+npm run dev            # http://localhost:5173
+```
+
+The root `.env` with `OPENROUTER_API_KEY` is still required for the
+backend. Restart the backend after any change under `src/backend/app/`
+(no reload configured).
+
 ## Architecture
 
 The application is built around a small number of focused components:
@@ -195,15 +265,11 @@ covers the failure mode a critic exists for. See [Travel Critic Agent (discarded
 
 - [x] Integrate LangSmith tracing
 - [x] Create a representative evaluation dataset
+- [ ] Decide which agent metrics to evaluate
 - [ ] Add automated evaluation of generated plans
-- [ ] Evaluate constraint satisfaction and recommendation quality
-- [ ] Evaluate groundedness and replanning behavior
-- [ ] Measure latency, token usage, and tool usage
-- [ ] Add unit and integration tests
-- [ ] Improve error handling and edge cases
-- [ ] Optimize latency and cost
+- [x] Measure latency, token usage, and cost
 - [ ] Complete documentation and architecture diagrams
-- [ ] Add deployment configuration
+- [x] Add Docker deployment (backend + frontend images, compose with persistent SQLite)
 - [ ] Deploy a public demo
 - [ ] Publish the first release
 
