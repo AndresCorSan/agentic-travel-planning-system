@@ -1,6 +1,6 @@
 from langchain_core.messages import SystemMessage
 from langgraph.prebuilt import ToolNode
-from app.agents.ai_models import subagent_llm
+from app.agents.ai_models import low_reasoning_llm
 from app.agents.subagents._base import SubagentState, build_subagent_graph
 from app.agents.usage import collect_usage
 from app.agents.utils import current_date_message, sanitize_messages_for_llm
@@ -37,7 +37,7 @@ Do not research flights, accommodations, weather, or activities.
 
 
 def build_rental_cars_subgraph(rental_cars_tool):
-    bound_llm = subagent_llm.bind_tools([rental_cars_tool])
+    bound_llm = low_reasoning_llm.bind_tools([rental_cars_tool])
 
     async def rental_cars_agent(state: SubagentState):
         task = state["task"]

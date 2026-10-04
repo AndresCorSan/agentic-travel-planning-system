@@ -153,5 +153,3 @@ light_llm = ResilientChatOpenRouter(
     api_key=os.getenv("OPENROUTER_API_KEY"),
     fallback_models=LIGHT_LLM_FALLBACKS,
 )
-
-subagent_llm = low_reasoning_llm

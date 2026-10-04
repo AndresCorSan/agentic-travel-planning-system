@@ -1,11 +1,10 @@
-// Shared domain types: the contract between mocks/service, stores and
-// components. Backend-facing extras (weather kind, ref, confirmed) are
-// annotated inline.
+// Shared domain types: the contract between service, stores and
+// components.
 export type MessageKind =
   | 'text'
   | 'destinations'
   | 'options'
-  | 'weather' // reserved for a future rich weather card (mock sends text)
+  | 'weather'
   | 'budget'
   | 'itinerary';
 
@@ -21,9 +20,7 @@ export interface ChatMessage {
   /** Destination candidates for `destinations` messages (backend streams
       them from the destination research branch); rendered as a carousel. */
   destinations?: Destination[];
-  /** Payload id for rich kinds (destination list, option list, …). Unread by
-      current renderers, which fetch mock payloads directly; kept for the
-      backend contract, which will serve payloads by id. */
+  /** Payload id for rich kinds (destination list, option list, …). */
   ref?: string;
   createdAt: string;
   /** Turn-level LLM usage stats (backend `stats` event / payload). Present
@@ -147,15 +144,6 @@ export interface Destination {
   highlights: string[];
   suitability: number;
   drawback: string;
-}
-
-export interface TravelOption {
-  id: string;
-  category: 'flight' | 'hotel' | 'transport' | 'activity' | 'rental';
-  title: string;
-  detail: string;
-  price: string;
-  meta?: string;
 }
 
 export interface SavedPlan {

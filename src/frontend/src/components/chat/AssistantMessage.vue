@@ -5,10 +5,7 @@ import { computed } from 'vue';
 import type { ChatMessage } from '../../types';
 import { SINGLE_CHOICE_CATEGORIES } from '../../types';
 import { useTravelStore } from '../../stores/travel';
-import BudgetSummary from '../travel/BudgetSummary.vue';
-import ItineraryBlock from '../travel/ItineraryBlock.vue';
 import DestinationRecommendation from '../travel/DestinationRecommendation.vue';
-import TravelOptionCard from '../travel/TravelOptionCard.vue';
 import SubagentResults from './SubagentResults.vue';
 import MessageMeta from './MessageMeta.vue';
 import { renderOptionGroups, renderRich } from './richtext';
@@ -80,9 +77,6 @@ function onSave() {
         :items="message.destinations"
         @choose="(messageId, id, name) => emit('choose', messageId, id, name)"
       />
-      <TravelOptionCard v-else-if="message.kind === 'options'" />
-      <BudgetSummary v-else-if="message.kind === 'budget'" />
-      <ItineraryBlock v-else-if="message.kind === 'itinerary'" />
       <MessageMeta :created-at="message.createdAt" :stats="message.stats" />
     </div>
   </div>

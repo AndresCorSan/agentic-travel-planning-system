@@ -45,8 +45,8 @@ async function onSuggestion(text: string) {
 async function load(id: string) {
   if (!library.loaded) await library.load();
   const conv = library.conversations.find((c) => c.id === id);
-  // Unknown id (e.g. fresh mock trip): load an empty thread under that id.
-  await travel.loadConversation(conv?.id ?? id, conv?.messageIds ?? []);
+  // Unknown id: load an empty thread under that id.
+  await travel.loadConversation(conv?.id ?? id);
 }
 onMounted(() => load(props.id));
 watch(() => props.id, load);
@@ -58,13 +58,9 @@ function onChoose(messageId: string, _id: string, name: string) {
   // Optimistic: mark Selected instantly; the confirmed requirements catch
   // up when the backend round-trip completes.
   travel.vote(messageId, name);
-  // Backend mode: the choice resumes the destination interrupt as a
+  // The choice resumes the destination interrupt as a
   // regular user message; the graph continues from main_llm.
-  if (import.meta.env.VITE_USE_BACKEND === 'true') {
-    void travel.send(`Let's go with ${name}.`);
-  } else {
-    void travel.choose(_id, name);
-  }
+  void travel.send(`Let's go with ${name}.`);
 }
 </script>
 

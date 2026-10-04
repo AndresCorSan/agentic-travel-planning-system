@@ -1,5 +1,5 @@
 /** Human-friendly timestamps for the sidebar ("5 min ago", "Sep 13, 2026").
- *  Non-ISO values (mock labels like "just now") pass through untouched. */
+ *  Non-ISO values (like "just now") pass through untouched. */
 export function formatUpdatedAt(value: string | null | undefined): string {
   if (!value) return '';
   const date = new Date(value);

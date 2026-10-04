@@ -6,7 +6,7 @@ Monorepo: `src/backend` (FastAPI + LangGraph) + `src/frontend` (Vue 3 + PrimeVue
 
 - Backend (from `src/backend`, so `app.*` imports resolve): `uv run uvicorn app.main:app --port 8000`. Restart it for any change under `app/` (no reload configured).
 - Frontend (from `src/frontend`): `npm run dev` (port 5173). Backend CORS allows only `http://localhost:5173`.
-- Frontend env (`src/frontend/.env`): `VITE_API_BASE_URL=http://localhost:8000/api/v1`, `VITE_USE_BACKEND=true`.
+- Frontend env (`src/frontend/.env`): `VITE_API_BASE_URL=http://localhost:8000/api/v1`.
 - Verify backend with `uv run python -m py_compile <file>`; verify frontend with `npm run build` (`vue-tsc -b` typechecks — fix type errors before finishing).
 - Windows shell is PowerShell 5.1: no `&&`, no `head`; use `;` / `Select-Object`.
 

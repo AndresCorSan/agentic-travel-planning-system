@@ -125,7 +125,7 @@ uv run uvicorn app.main:app --port 8000
 Frontend (from `src/frontend`):
 
 ``` bash
-cp .env.example .env   # VITE_API_BASE_URL=http://localhost:8000/api/v1, VITE_USE_BACKEND=true
+cp .env.example .env   # VITE_API_BASE_URL=http://localhost:8000/api/v1
 npm install
 npm run dev            # http://localhost:5173
 ```

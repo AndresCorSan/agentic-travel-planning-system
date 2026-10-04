@@ -10,7 +10,6 @@ from app.agents.ai_models.llm import (
     light_llm,
     llm,
     low_reasoning_llm,
-    subagent_llm,
 )
 
 __all__ = [
@@ -21,5 +20,4 @@ __all__ = [
     "light_llm",
     "llm",
     "low_reasoning_llm",
-    "subagent_llm",
 ]

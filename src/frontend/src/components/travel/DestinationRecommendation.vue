@@ -1,20 +1,19 @@
 <!-- Rich carousel inside assistant messages: candidate destinations as
      tall horizontally-scrollable cards (one per candidate, snap scroll).
-     `items` carries backend candidates; falls back to mock data offline.
+     `items` carries backend candidates.
      Card headers show a Wikimedia Commons photo (resolved lazily by
      destination name) with the title overlaid; without a photo the
      plain header is used instead. -->
 <script setup lang="ts">
 import Button from 'primevue/button';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import { getDestinations } from '../../api/travelService';
 import { useTravelStore } from '../../stores/travel';
 import type { Destination } from '../../types';
 
 const props = defineProps<{ messageId: string; chosen: string | null; items?: Destination[] }>();
 const emit = defineEmits<{ choose: [messageId: string, id: string, name: string] }>();
 
-const items = computed(() => props.items ?? getDestinations());
+const items = computed(() => props.items ?? []);
 
 // Optimistic vote for this message wins until the confirmed destination
 // arrives via requirements (props.chosen).

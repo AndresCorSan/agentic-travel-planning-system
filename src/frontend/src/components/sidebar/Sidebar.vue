@@ -143,8 +143,8 @@ function isTarget(t: RowTarget | null, kind: RowKind, id: string) {
 const isEditing = (kind: RowKind, id: string) => isTarget(editingTarget.value, kind, id);
 const isMenuOpen = (kind: RowKind, id: string) => isTarget(menuOpenTarget.value, kind, id);
 
-// Plan rows mirror chat rows: title + saved date below. Mock plans carry
-// no createdAt, so fall back to destination · dates there.
+// Plan rows mirror chat rows: title + saved date below. Plans without
+// createdAt fall back to destination · dates there.
 function planMeta(p: { createdAt?: string | null; destination: string; dates: string }): string {
   return (
     formatUpdatedAt(p.createdAt) ||

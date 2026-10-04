@@ -1,6 +1,6 @@
 from langchain_core.messages import SystemMessage
 from langgraph.prebuilt import ToolNode
-from app.agents.ai_models import subagent_llm
+from app.agents.ai_models import low_reasoning_llm
 from app.agents.subagents._base import SubagentState, build_subagent_graph
 from app.agents.usage import collect_usage
 from app.agents.utils import current_date_message, sanitize_messages_for_llm
@@ -34,7 +34,7 @@ Output:
 
 
 def build_activities_subgraph(ticketlens_tools):
-    bound_llm = subagent_llm.bind_tools(ticketlens_tools)
+    bound_llm = low_reasoning_llm.bind_tools(ticketlens_tools)
 
     async def activities_agent(state: SubagentState):
         task = state["task"]

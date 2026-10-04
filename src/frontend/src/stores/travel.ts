@@ -10,20 +10,15 @@ import type { SubagentResult, AgentRow, BudgetSummary, ChatMessage, Conversation
 import { SINGLE_CHOICE_CATEGORIES } from '../types';
 
 export const useTravelStore = defineStore('travel', () => {
-  const BACKEND_MODE = import.meta.env.VITE_USE_BACKEND === 'true';
   const conversationId = ref<string>('lisbon-trip');
   const messageIds = ref<string[]>([]);
   const cache = ref<Record<string, ChatMessage>>({});
   const loading = ref(false);
-  // Backend mode: the panel starts blank; `requirements.updated` /
-  // `research.update` stream events are the only writers. Mock mode keeps
-  // the Lisbon snapshot so the UI demo works offline.
-  const requirements = ref<RequirementItem[]>(
-    BACKEND_MODE ? service.emptyRequirements() : service.baseRequirements('Lisbon')
-  );
-  const research = ref<ResearchStatus>(BACKEND_MODE ? service.emptyResearch() : service.fullResearch());
-  // Static mock snapshot (never reassigned yet); the backend will own it.
-  const budget = ref<BudgetSummary>(BACKEND_MODE ? service.emptyBudget() : service.lisbonBudget());
+  // The panel starts blank; `requirements.updated` /
+  // `research.update` stream events are the only writers.
+  const requirements = ref<RequirementItem[]>(service.emptyRequirements());
+  const research = ref<ResearchStatus>(service.emptyResearch());
+  const budget = ref<BudgetSummary>(service.emptyBudget());
   // Selectable options published by main_llm (`options` events), by category.
   // A republish for a category replaces its list (new searches overwrite).
   const optionsByCategory = ref<Record<string, PlanOption[]>>({});
@@ -88,45 +83,43 @@ export const useTravelStore = defineStore('travel', () => {
     if (!choices.length || choicesSaved.value[messageId]) return;
     loading.value = true;
     try {
-      if (BACKEND_MODE) {
-        // 1. Deterministic save (no LLM). 2. Same user message through the
-        // normal pipeline — like "Let's go with…" for destinations — where
-        // extract+router short-circuit straight to main_llm for confirmation.
-        const res = await service.saveChoices(conversationId.value, choices);
-        // Instant UI update from server truth (like the optimistic vote
-        // for destinations); the confirm turn re-syncs afterwards.
-        if (res.plan) applyPlan(res.plan);
-        const names = res.saved?.length
-          ? res.saved
-          : choices.map((c) => optionsById.value[c.option_id]?.label ?? c.option_id);
-        choicesSaved.value = { ...choicesSaved.value, [messageId]: true };
-        // Friendly list ordered by category (no prices): the first line is
-        // the prefix the backend short-circuits on.
-        const order = (c: string) => {
-          const idx = ['transportation', 'accommodation', 'rental_car', 'activities'].indexOf(c);
-          return idx < 0 ? 99 : idx;
-        };
-        const catLabel = (c: string, g: string) => {
-          const words = c.replace(/_/g, ' ');
-          const base = words.charAt(0).toUpperCase() + words.slice(1);
-          return g ? `${base} (${groupLabel(g)})` : base;
-        };
-        const named = choices.map((c, i) => ({
-          category: c.category,
-          group: c.group ?? '',
-          name: names[i] ?? c.option_id,
-        }));
-        // One line per (category, group) (multi-choice ones join with commas).
-        const byCategory = new Map<string, { category: string; group: string; names: string[] }>();
-        for (const n of named.sort((a, b) => order(a.category) - order(b.category) || (a.group < b.group ? -1 : a.group > b.group ? 1 : 0))) {
-          const k = `${n.category}||${n.group}`;
-          const entry = byCategory.get(k) ?? { category: n.category, group: n.group, names: [] };
-          entry.names.push(n.name);
-          byCategory.set(k, entry);
-        }
-        const lines = [...byCategory.values()].map((e) => `- ${catLabel(e.category, e.group)}: ${e.names.join(', ')}`);
-        await send(`${SAVED_CHOICES_PREFIX}\n${lines.join('\n')}`);
+      // 1. Deterministic save (no LLM). 2. Same user message through the
+      // normal pipeline — like "Let's go with…" for destinations — where
+      // extract+router short-circuit straight to main_llm for confirmation.
+      const res = await service.saveChoices(conversationId.value, choices);
+      // Instant UI update from server truth (like the optimistic vote
+      // for destinations); the confirm turn re-syncs afterwards.
+      if (res.plan) applyPlan(res.plan);
+      const names = res.saved?.length
+        ? res.saved
+        : choices.map((c) => optionsById.value[c.option_id]?.label ?? c.option_id);
+      choicesSaved.value = { ...choicesSaved.value, [messageId]: true };
+      // Friendly list ordered by category (no prices): the first line is
+      // the prefix the backend short-circuits on.
+      const order = (c: string) => {
+        const idx = ['transportation', 'accommodation', 'rental_car', 'activities'].indexOf(c);
+        return idx < 0 ? 99 : idx;
+      };
+      const catLabel = (c: string, g: string) => {
+        const words = c.replace(/_/g, ' ');
+        const base = words.charAt(0).toUpperCase() + words.slice(1);
+        return g ? `${base} (${groupLabel(g)})` : base;
+      };
+      const named = choices.map((c, i) => ({
+        category: c.category,
+        group: c.group ?? '',
+        name: names[i] ?? c.option_id,
+      }));
+      // One line per (category, group) (multi-choice ones join with commas).
+      const byCategory = new Map<string, { category: string; group: string; names: string[] }>();
+      for (const n of named.sort((a, b) => order(a.category) - order(b.category) || (a.group < b.group ? -1 : a.group > b.group ? 1 : 0))) {
+        const k = `${n.category}||${n.group}`;
+        const entry = byCategory.get(k) ?? { category: n.category, group: n.group, names: [] };
+        entry.names.push(n.name);
+        byCategory.set(k, entry);
       }
+      const lines = [...byCategory.values()].map((e) => `- ${catLabel(e.category, e.group)}: ${e.names.join(', ')}`);
+      await send(`${SAVED_CHOICES_PREFIX}\n${lines.join('\n')}`);
     } finally {
       loading.value = false;
     }
@@ -160,10 +153,10 @@ export const useTravelStore = defineStore('travel', () => {
   }
   let streamCounter = 1000;
 
-  async function loadConversation(id: string, ids: string[]) {
+  async function loadConversation(id: string) {
     conversationId.value = id;
     loading.value = true;
-    // Blank slate in both modes; backend rehydrate fills it below.
+    // Blank slate; backend rehydrate fills it below.
     messageIds.value = [];
     requirements.value = service.emptyRequirements();
     research.value = service.emptyResearch();
@@ -181,49 +174,28 @@ export const useTravelStore = defineStore('travel', () => {
     streaming.value = null;
     streamStatus.value = '';
     try {
-      if (BACKEND_MODE) {
-        // Rehydrate persisted history + graph-owned panel state so a
-        // reload (or backend restart) restores the thread.
-        const [msgs, state] = await Promise.all([
-          service.getConversationMessages(id).catch(() => []),
-          service.getConversationState(id),
-        ]);
-        for (const m of msgs) cache.value[m.id] = m;
-        messageIds.value = msgs.map((m) => m.id);
-        // Past subagent outputs imply their research already ran.
-        for (const m of msgs) {
-          for (const r of m.subagentResults ?? []) {
-            const key = AGENT_RESEARCH_KEY[r.id];
-            if (key) research.value[key] = 'done';
-          }
-        }
-        if (state) {
-          if (state.requirements?.length) requirements.value = state.requirements;
-          if (state.options) optionsByCategory.value = state.options;
-          if (state.plan) applyPlan(state.plan);
-        }
-        return;
-      }
-      const msgs = await service.getMessages(ids);
+      // Rehydrate persisted history + graph-owned panel state so a
+      // reload (or backend restart) restores the thread.
+      const [msgs, state] = await Promise.all([
+        service.getConversationMessages(id).catch(() => []),
+        service.getConversationState(id),
+      ]);
       for (const m of msgs) cache.value[m.id] = m;
-      messageIds.value = ids;
-      // Mock shows detail only for Lisbon; everything else gets blank requirements.
-      requirements.value = service.baseRequirements(id === 'lisbon-trip' ? 'Lisbon' : null);
+      messageIds.value = msgs.map((m) => m.id);
+      // Past subagent outputs imply their research already ran.
+      for (const m of msgs) {
+        for (const r of m.subagentResults ?? []) {
+          const key = AGENT_RESEARCH_KEY[r.id];
+          if (key) research.value[key] = 'done';
+        }
+      }
+      if (state) {
+        if (state.requirements?.length) requirements.value = state.requirements;
+        if (state.options) optionsByCategory.value = state.options;
+        if (state.plan) applyPlan(state.plan);
+      }
     } finally {
       loading.value = false;
-    }
-  }
-
-  function append(result: { user: ChatMessage; replies: ChatMessage[]; destinationChosen?: string }) {
-    cache.value[result.user.id] = result.user;
-    messageIds.value.push(result.user.id);
-    for (const r of result.replies) {
-      cache.value[r.id] = r;
-      messageIds.value.push(r.id);
-    }
-    if (result.destinationChosen) {
-      requirements.value = service.baseRequirements(result.destinationChosen);
-      research.value = service.fullResearch();
     }
   }
 
@@ -239,31 +211,21 @@ export const useTravelStore = defineStore('travel', () => {
     messageIds.value.push(pending.id);
     loading.value = true;
     // Streaming path: the pending message becomes the final user message.
-    // Classic path: the backend echoes the user message via append(res).
     let keepPending = false;
     try {
-      if (BACKEND_MODE) {
-        streamStatus.value = 'Reasoning…';
-        agentRows.value = [];
-        streaming.value = null;
-        pendingResults = [];
-        pendingTurnOptions = [];
-        for await (const ev of service.streamMessage(conversationId.value, text)) applyEvent(ev);
-        streaming.value = null;
-        keepPending = true;
-        // Keep the sidebar row fresh (the backend emits `title.updated`
-        // once light_llm has enough context — no eager first-message slice).
-        if (BACKEND_MODE) {
-          const row = library.conversations.find((c) => c.id === conversationId.value);
-          if (row) {
-            row.updatedAt = 'just now';
-          }
-        }
-      } else {
-        const res = await service.sendMessage(conversationId.value, text);
-        messageIds.value = messageIds.value.filter((id) => id !== pending.id);
-        delete cache.value[pending.id];
-        append(res);
+      streamStatus.value = 'Reasoning…';
+      agentRows.value = [];
+      streaming.value = null;
+      pendingResults = [];
+      pendingTurnOptions = [];
+      for await (const ev of service.streamMessage(conversationId.value, text)) applyEvent(ev);
+      streaming.value = null;
+      keepPending = true;
+      // Keep the sidebar row fresh (the backend emits `title.updated`
+      // once light_llm has enough context — no eager first-message slice).
+      const row = library.conversations.find((c) => c.id === conversationId.value);
+      if (row) {
+        row.updatedAt = 'just now';
       }
     } finally {
       if (!keepPending) {
@@ -396,21 +358,10 @@ export const useTravelStore = defineStore('travel', () => {
     }
   }
 
-  async function choose(destinationId: string, destinationName: string) {
-    loading.value = true;
-    try {
-      const res = await service.chooseDestination(destinationId);
-      append({ ...res, destinationChosen: destinationName });
-    } finally {
-      loading.value = false;
-    }
-  }
-
-  return { messages, loading, streamStatus, agentRows, streaming, requirements, research, budget, voted, vote, loadConversation, send, choose, optionsByCategory, optionsById, plan, planTotal, planCurrency, planBudget, planOverBudget, drafts, choicesSaved, optionsByMessage, toggleOption, draftChoices, saveChoices };
+  return { messages, loading, streamStatus, agentRows, streaming, requirements, research, budget, voted, vote, loadConversation, send, optionsByCategory, optionsById, plan, planTotal, planCurrency, planBudget, planOverBudget, drafts, choicesSaved, optionsByMessage, toggleOption, draftChoices, saveChoices };
 });
 
 export const useLibraryStore = defineStore('library', () => {
-  const BACKEND_MODE = import.meta.env.VITE_USE_BACKEND === 'true';
   const conversations = ref<Conversation[]>([]);
   const plans = ref<SavedPlan[]>([]);
   const loaded = ref(false);
@@ -429,11 +380,11 @@ export const useLibraryStore = defineStore('library', () => {
   function renameConversation(id: string, title: string) {
     const c = conversations.value.find((c) => c.id === id);
     if (c) c.title = title;
-    if (BACKEND_MODE) void service.renameConversationRemote(id, title);
+    void service.renameConversationRemote(id, title);
   }
   function deleteConversation(id: string) {
     conversations.value = conversations.value.filter((c) => c.id !== id);
-    if (BACKEND_MODE) void service.deleteConversationRemote(id);
+    void service.deleteConversationRemote(id);
   }
   function addPlan(plan: SavedPlan) {
     if (!plans.value.some((p) => p.id === plan.id)) plans.value.unshift(plan);
@@ -441,11 +392,11 @@ export const useLibraryStore = defineStore('library', () => {
   function renamePlan(id: string, title: string) {
     const p = plans.value.find((p) => p.id === id);
     if (p) p.title = title;
-    if (BACKEND_MODE) void service.renamePlanRemote(id, title);
+    void service.renamePlanRemote(id, title);
   }
   function deletePlan(id: string) {
     plans.value = plans.value.filter((p) => p.id !== id);
-    if (BACKEND_MODE) void service.deletePlanRemote(id);
+    void service.deletePlanRemote(id);
   }
   function addConversation(title: string, id?: string): Conversation {
     const c: Conversation = {

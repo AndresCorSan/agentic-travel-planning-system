@@ -1,6 +1,5 @@
 <!-- Message timestamp: "now" during the first minute, then the local
-     clock time (HH:MM). Non-ISO values (mock "10:02", legacy "now")
-     render as-is. Re-evaluates every 30s so old messages flip on their
+     clock time (HH:MM). Non-ISO values render as-is. Re-evaluates every 30s so old messages flip on their
      own without a page reload.
      Root keeps class "time" so each parent's scoped style still applies. -->
 <script setup lang="ts">
