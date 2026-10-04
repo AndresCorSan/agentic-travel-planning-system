@@ -134,7 +134,7 @@ export const useTravelStore = defineStore('travel', () => {
 
   const messages = computed(() => messageIds.value.map((id) => cache.value[id]).filter(Boolean));
 
-  // Live streaming state (Fase A: driven by streamMock, later by SSE).
+  // Live streaming state (SSE).
   const streamStatus = ref('Reasoning…');
   const agentRows = ref<AgentRow[]>([]);
   const streaming = ref<ChatMessage | null>(null);

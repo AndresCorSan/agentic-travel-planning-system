@@ -111,7 +111,6 @@ async def load_mcp_tools() -> dict:
                 rental_cars_tool = t
             elif t.name in WEATHER_TOOL_NAMES:
                 weather_tools.append(t)
-                print(f"Loaded weather tool: {t.name}")
 
     return {
         "weather_tools": weather_tools,

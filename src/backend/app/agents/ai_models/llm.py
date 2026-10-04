@@ -154,13 +154,4 @@ light_llm = ResilientChatOpenRouter(
     fallback_models=LIGHT_LLM_FALLBACKS,
 )
 
-# These are faster and cheaper options, but they are usually blocked in OpenRouter 
-# because they have a higher demand. As a fallback, we use GLM-5.3-Flash with minimal reasoning.
-# subagent_llm = ChatOpenAI(
-#     model="inclusionai/ling-3.0-flash",
-#     # model="mistralai/mistral-small-3.2-24b-instruct",
-#     # model="google/gemma-3-27b-it",
-#     base_url="https://openrouter.ai/api/v1",
-#     api_key=os.getenv("OPENROUTER_API_KEY"),
-# )
 subagent_llm = low_reasoning_llm

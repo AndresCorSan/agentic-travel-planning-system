@@ -2,13 +2,9 @@
 
 from app.agents.ai_models.jev import (
     JEV_CONFIDENCE_THRESHOLD,
-    JEV_DECISIONS_URL,
-    JEV_MODEL,
-    JEV_TIMEOUT_S,
     decide_route_via_jev,
 )
 from app.agents.ai_models.llm import (
-    GLM_PROVIDER,
     LIGHT_LLM_FALLBACKS,
     ResilientChatOpenRouter,
     light_llm,
@@ -18,11 +14,7 @@ from app.agents.ai_models.llm import (
 )
 
 __all__ = [
-    "GLM_PROVIDER",
     "JEV_CONFIDENCE_THRESHOLD",
-    "JEV_DECISIONS_URL",
-    "JEV_MODEL",
-    "JEV_TIMEOUT_S",
     "LIGHT_LLM_FALLBACKS",
     "ResilientChatOpenRouter",
     "decide_route_via_jev",

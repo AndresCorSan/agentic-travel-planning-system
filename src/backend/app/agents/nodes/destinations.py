@@ -44,8 +44,6 @@ destination_llm = llm.with_structured_output(
 )
 
 async def destination_research(state: TravelState):
-    # TODO(phase8): replace print with structured logging (app.core.logging).
-
     requirements = state["requirements"]
 
     result = await destination_llm.ainvoke([

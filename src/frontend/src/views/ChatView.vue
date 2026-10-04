@@ -54,7 +54,7 @@ watch(() => props.id, load);
 function onSend(text: string) {
   void travel.send(text);
 }
-function onChoose(messageId: string, id: string, name: string) {
+function onChoose(messageId: string, _id: string, name: string) {
   // Optimistic: mark Selected instantly; the confirmed requirements catch
   // up when the backend round-trip completes.
   travel.vote(messageId, name);
@@ -62,9 +62,8 @@ function onChoose(messageId: string, id: string, name: string) {
   // regular user message; the graph continues from main_llm.
   if (import.meta.env.VITE_USE_BACKEND === 'true') {
     void travel.send(`Let's go with ${name}.`);
-    void id;
   } else {
-    void travel.choose(id, name);
+    void travel.choose(_id, name);
   }
 }
 </script>

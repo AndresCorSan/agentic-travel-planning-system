@@ -200,7 +200,6 @@ export async function sendMessage(conversationId: string, text: string): Promise
       createdAt: new Date().toISOString()
     }));
     for (const m of [user, ...replies]) extraMessages[m.id] = m;
-    void conversationId;
     return { user, replies };
   }
   await delay();
@@ -261,7 +260,6 @@ export async function sendMessage(conversationId: string, text: string): Promise
   }
   for (const m of [user, ...replies]) extraMessages[m.id] = m;
   // Unused in the mock; the backend will scope replies by conversation.
-  void conversationId;
   return { user, replies, destinationChosen };
 }
 
