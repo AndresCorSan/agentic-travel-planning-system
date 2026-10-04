@@ -42,6 +42,14 @@ onMounted(() => {
 
 const activeTrip = computed(() => (route.name === 'trip' ? String(route.params.id) : null));
 const onPlansRoute = computed(() => String(route.name ?? '').startsWith('plan'));
+const onConversationsRoute = computed(() => route.name === 'conversations');
+// Sidebar preview cap: both groups show the latest N rows (lists are
+// newest-first) and link out to the full overview pages past that.
+const SIDEBAR_LIMIT = 8;
+const recentConversations = computed(() => library.conversations.slice(0, SIDEBAR_LIMIT));
+const recentPlans = computed(() => library.plans.slice(0, SIDEBAR_LIMIT));
+const hasMoreConversations = computed(() => library.conversations.length > SIDEBAR_LIMIT);
+const hasMorePlans = computed(() => library.plans.length > SIDEBAR_LIMIT);
 // Trip switching locks mid-reply (router guard covers direct URL nav).
 const navLocked = computed(() => travel.loading);
 // Show tooltip on the New trip button when locked
@@ -96,6 +104,14 @@ function openPlans() {
   }
   planPop.value?.hide();
   void router.push('/plans');
+}
+function openConversations() {
+  if (navLocked.value) {
+    notifyLocked();
+    return;
+  }
+  convPop.value?.hide();
+  void router.push('/conversations');
 }
 
 // Per-row options popover (rename / delete) shared by conversations and plans.
@@ -221,14 +237,14 @@ function askDelete(kind: RowKind, id: string) {
         aria-label="Toggle sidebar"
         @click="ui.toggleSidebar()"
       />
-      <span v-if="!(collapsed)" class="brand">Travel Intelligence</span>
+      <span v-if="!(collapsed)" class="brand"><span class="brand-row">Travel<span class="brand-dot"> · </span>Intelligence</span><span class="brand-u" aria-hidden="true" /></span>
     </div>
 
     <div class="action">
       <Button icon="pi pi-plus" :label="collapsed ? undefined : 'New trip'" class="new-btn" @click="newTrip()" v-tooltip="newTripTip" />
     </div>
 
-    <nav v-if="!collapsed" class="groups">
+    <nav v-if="!collapsed" class="groups slim-scroll">
       <button class="group-toggle" @click="toggleConv()" :aria-expanded="convOpen">
         <i class="pi pi-chevron-down toggle-ic" :class="{ closed: !convOpen }" />
         Conversations
@@ -236,8 +252,12 @@ function askDelete(kind: RowKind, id: string) {
       </button>
       <div class="collapse" :class="{ closed: !convOpen }">
         <div class="clip">
-      <ul>
-        <li v-for="c in library.conversations" :key="c.id">
+      <div v-if="!library.conversations.length" class="group-empty">
+        <b>Nothing here yet</b>
+        <p>No conversations yet. Start a new trip and it will show up here.</p>
+      </div>
+      <ul v-else>
+        <li v-for="c in recentConversations" :key="c.id">
           <div
             class="row"
             :class="{ active: activeTrip === c.id, locked: navLocked && activeTrip !== c.id }"
@@ -275,9 +295,11 @@ function askDelete(kind: RowKind, id: string) {
           </div>
         </li>
       </ul>
+      <button v-if="hasMoreConversations" class="group-footer" @click="openConversations()">View all conversations <i class="pi pi-arrow-right" /></button>
         </div>
       </div>
 
+      <div class="group-sep" aria-hidden="true" />
       <button class="group-toggle" @click="togglePlans()" :aria-expanded="plansOpen">
         <i class="pi pi-chevron-down toggle-ic" :class="{ closed: !plansOpen }" />
         Saved plans
@@ -285,8 +307,12 @@ function askDelete(kind: RowKind, id: string) {
       </button>
       <div class="collapse" :class="{ closed: !plansOpen }">
         <div class="clip">
-      <ul>
-        <li v-for="p in library.plans" :key="p.id">
+      <div v-if="!library.plans.length" class="group-empty">
+        <b>No saved plans</b>
+        <p>Plans you save from the chat will appear here.</p>
+      </div>
+      <ul v-else>
+        <li v-for="p in recentPlans" :key="p.id">
           <div
             class="row"
             :class="{ locked: navLocked }"
@@ -324,6 +350,7 @@ function askDelete(kind: RowKind, id: string) {
           </div>
         </li>
       </ul>
+      <button v-if="hasMorePlans" class="group-footer" @click="openPlans()">View all saved plans <i class="pi pi-arrow-right" /></button>
         </div>
       </div>
     </nav>
@@ -331,7 +358,7 @@ function askDelete(kind: RowKind, id: string) {
     <div v-else class="rail-lists">
       <button
         class="rail-btn"
-        :class="{ active: route.name === 'trip' }"
+        :class="{ active: route.name === 'trip' || onConversationsRoute }"
         aria-label="Conversations"
         v-tooltip.right="'Conversations'"
         @click="convPop?.toggle($event)"
@@ -341,7 +368,7 @@ function askDelete(kind: RowKind, id: string) {
       <Popover ref="convPop">
         <p class="pop-title">Recent conversations</p>
         <ul class="pop-list">
-          <li v-for="c in library.conversations" :key="c.id">
+          <li v-for="c in recentConversations" :key="c.id">
             <button class="pop-row" :class="{ sel: activeTrip === c.id, locked: navLocked && activeTrip !== c.id }" :title="navLocked && activeTrip !== c.id ? LOCKED_MSG : c.title" @click="openTrip(c.id)">
               <span class="pop-text">
                 <span class="pop-item-title">{{ c.title }}</span>
@@ -351,6 +378,7 @@ function askDelete(kind: RowKind, id: string) {
           </li>
         </ul>
         <p v-if="!library.conversations.length" class="meta">No conversations yet.</p>
+        <button v-if="hasMoreConversations" class="pop-footer" @click="openConversations()">View all conversations <i class="pi pi-arrow-right" /></button>
       </Popover>
 
       <button
@@ -365,7 +393,7 @@ function askDelete(kind: RowKind, id: string) {
       <Popover ref="planPop">
         <p class="pop-title">Saved plans</p>
         <ul class="pop-list">
-          <li v-for="p in library.plans" :key="p.id">
+          <li v-for="p in recentPlans" :key="p.id">
             <button class="pop-row" :class="{ locked: navLocked }" :title="navLocked ? LOCKED_MSG : p.title" @click="openPlan(p.id)">
               <span class="pop-text">
                 <span class="pop-item-title">{{ p.title }}</span>
@@ -374,7 +402,8 @@ function askDelete(kind: RowKind, id: string) {
             </button>
           </li>
         </ul>
-        <button class="pop-footer" :class="{ locked: navLocked }" :title="navLocked ? LOCKED_MSG : undefined" @click="openPlans()">View all plans <i class="pi pi-arrow-right" /></button>
+        <p v-if="!library.plans.length" class="meta">No saved plans yet.</p>
+        <button v-if="hasMorePlans" class="pop-footer" :class="{ locked: navLocked }" :title="navLocked ? LOCKED_MSG : undefined" @click="openPlans()">View all saved plans <i class="pi pi-arrow-right" /></button>
       </Popover>
     </div>
 
@@ -421,10 +450,37 @@ function askDelete(kind: RowKind, id: string) {
   justify-content: center;
   padding: 2px 0 6px;
 }
+/* Hairline under the brand (expanded sidebar only). */
+.sidebar:not(.collapsed) .top {
+  border-bottom: 1px solid var(--p-surface-200);
+  padding-bottom: 12px;
+}
+.sidebar:not(.collapsed) .action {
+  margin-top: 4px;
+}
 .brand {
-  font-weight: 600;
-  font-size: 0.92rem;
+  display: inline-flex;
+  flex-direction: column;
+  width: fit-content;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
   white-space: nowrap;
+  color: var(--p-surface-900);
+}
+.brand-row {
+  line-height: normal;
+}
+.brand-dot {
+  color: var(--p-primary-600);
+}
+.brand-u {
+  display: block;
+  height: 2px;
+  border-radius: 99px;
+  margin-top: 3px;
+  background: var(--p-primary-600);
 }
 .new-btn {
   width: 100%;
@@ -447,7 +503,14 @@ function askDelete(kind: RowKind, id: string) {
   flex-direction: column;
   gap: 2px;
 }
-/* Group toggle (collapsible section header) */
+/* Hairline dividing Conversations from Saved plans. */
+.group-sep {
+  border-top: 1px solid var(--p-surface-200);
+  /* 4px + the toggle's margin-top (10px) = 14px, same title-to-rule
+     rhythm as the state panel sections. */
+  margin: 10px 12px 4px;
+}
+/* Group toggle (collapsible section header) with accent count pill. */
 .group-toggle {
   display: flex;
   align-items: center;
@@ -460,14 +523,16 @@ function askDelete(kind: RowKind, id: string) {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-weight: 600;
-  padding: 6px 8px;
+  padding: 8px 12px;
   margin-top: 10px;
-  border-radius: 6px;
+  border-radius: 9px;
   cursor: pointer;
   text-align: left;
 }
 .group-toggle:first-child {
-  margin-top: 2px;
+  /* 8px sidebar gap + 6px = 14px from the New trip button,
+     the shared header-to-upper-element rhythm. */
+  margin-top: 6px;
 }
 .group-toggle:hover {
   background: var(--p-surface-100);
@@ -480,7 +545,8 @@ function askDelete(kind: RowKind, id: string) {
 .group-toggle .count {
   margin-left: auto;
   font-size: 0.7rem;
-  background: var(--p-surface-100);
+  background: var(--p-primary-600);
+  color: #fff;
   border-radius: 10px;
   padding: 1px 8px;
   letter-spacing: 0;
@@ -489,6 +555,67 @@ ul {
   list-style: none;
   margin: 0;
   padding: 0;
+}
+/* Empty state for collapsible groups */
+.group-empty {
+  border: 1.5px dashed var(--p-surface-300);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 2px 2px 8px;
+  text-align: left;
+}
+.group-empty b {
+  display: block;
+  font-size: 0.83rem;
+}
+.group-empty p {
+  margin: 2px 0 0;
+  font-size: 0.8rem;
+  color: var(--p-surface-500);
+  line-height: 1.45;
+}
+/* "View all …" links (expanded groups + collapsed-rail popovers).
+   Arrow nudges right on hover. Only the outer margins differ. */
+.group-footer,
+.pop-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px 4px;
+  border: 0;
+  border-top: 1px solid var(--p-surface-200);
+  border-radius: 0 0 8px 8px;
+  background: none;
+  color: var(--p-primary-600);
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.group-footer {
+  margin: 2px 0 8px;
+}
+.pop-footer {
+  margin-top: 6px;
+}
+.group-footer i,
+.pop-footer i {
+  font-size: 0.75rem;
+  transition: transform 0.18s ease;
+}
+.group-footer:hover,
+.pop-footer:hover {
+  background: color-mix(in srgb, var(--p-primary-600) 8%, transparent);
+  color: var(--p-primary-700);
+}
+.group-footer:hover i,
+.pop-footer:hover i {
+  transform: translateX(3px);
+}
+.group-footer:active i,
+.pop-footer:active i {
+  transform: translateX(5px);
 }
 /* Sidebar rows (conversations + plans). Divs with role=button so the
    per-row options button can nest inside with valid HTML. */
@@ -512,8 +639,10 @@ ul {
   text-decoration: none;
 }
 .row.active {
-  background: var(--p-primary-50);
-  color: var(--p-primary-700);
+  /* Same treatment as the collapsed rail icons (.rail-btn.active):
+     tinted tile + accent text, in both modes. */
+  background: color-mix(in srgb, var(--p-primary-600) 12%, transparent);
+  color: var(--p-primary-600);
 }
 /* Locked (mid-reply) rows: non-active trips are not clickable —
    no dimming, just the not-allowed cursor (title attr explains why). */
@@ -594,8 +723,10 @@ ul {
   background: var(--p-surface-100);
 }
 .rail-btn.active {
-  background: var(--p-primary-50);
-  color: var(--p-primary-700);
+  /* Same treatment as the suggestion icons (WelcomeHero .suggestion-icon):
+     tinted tile + accent icon, in both modes. */
+  background: color-mix(in srgb, var(--p-primary-600) 12%, transparent);
+  color: var(--p-primary-600);
 }
 .pop-list {
   min-width: 220px;
@@ -644,24 +775,6 @@ ul {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.pop-footer {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  margin-top: 6px;
-  padding: 8px 10px 2px;
-  border: 0;
-  border-top: 1px solid var(--p-surface-200);
-  background: none;
-  color: var(--p-primary-600);
-  font-size: 0.84rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-.pop-footer i {
-  font-size: 0.75rem;
 }
 /* Bottom prefs: accent picker + theme toggle. */
 .prefs {

@@ -45,7 +45,7 @@ const CAPABILITIES: { label: string; icon: string }[] = [
 </script>
 
 <template>
-  <div class="welcome">
+  <div class="welcome slim-scroll">
     <div class="hero">
       <h1 class="title">Where do you want <span class="grad">to travel?</span></h1>
       <p class="subtitle">

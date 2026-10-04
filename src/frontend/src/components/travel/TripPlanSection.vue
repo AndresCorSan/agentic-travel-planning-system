@@ -197,7 +197,7 @@ const sortedItems = computed(() =>
   font-weight: 700;
   margin-top: 6px;
   padding-top: 8px;
-  border-top: 1px solid var(--p-surface-200);
+  border-top: 1px dashed var(--p-surface-300);
 }
 .footnote {
   margin: 2px 0 6px;

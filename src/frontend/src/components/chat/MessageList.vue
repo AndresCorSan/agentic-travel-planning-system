@@ -105,9 +105,10 @@ async function fitSpacer(): Promise<number | null> {
   return userTop;
 }
 // Anchor the last user bubble to the top of the viewport.
+// Offset clears the floating title pill (~63px + breathing room).
 async function scrollToUserTop() {
   const userTop = await fitSpacer();
-  if (userTop !== null) scroller.value?.scrollTo({ top: userTop - 16, behavior: 'smooth' });
+  if (userTop !== null) scroller.value?.scrollTo({ top: userTop - 76, behavior: 'smooth' });
 }
 onMounted(scrollDown);
 // New user message while sending: pin it to the top (only for fresh
@@ -128,7 +129,7 @@ watch([() => props.streaming?.text?.length ?? 0, () => props.agents.length, () =
 </script>
 
 <template>
-  <div ref="scroller" class="messages">
+  <div ref="scroller" class="messages slim-scroll">
     <div class="inner">
       <template v-for="m in messages" :key="m.id">
         <UserMessage v-if="m.role === 'user'" :text="m.text ?? ''" :time="m.createdAt" />
@@ -154,7 +155,8 @@ watch([() => props.streaming?.text?.length ?? 0, () => props.agents.length, () =
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 8px 20px;
+  /* Top room for the floating title pill (pill bottom edge ~63px). */
+  padding: 76px 20px 8px;
 }
 .inner {
   max-width: var(--app-max-chat-width);

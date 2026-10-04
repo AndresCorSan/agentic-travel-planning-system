@@ -91,7 +91,7 @@ const savedText = computed(() => savedLabel(plan.value?.createdAt));
 </script>
 
 <template>
-  <div class="detail">
+  <div class="detail slim-scroll">
     <div class="topbar">
       <Button label="Back to plans" icon="pi pi-arrow-left" severity="secondary" text @click="router.push('/plans')" />
       <Button

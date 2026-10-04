@@ -83,7 +83,7 @@ function submit() {
      send button stays pinned to the bottom on its own when the
      textarea grows to multiple lines. */
   align-items: center;
-  background: color-mix(in srgb, var(--p-surface-0) 88%, transparent);
+  background: color-mix(in srgb, var(--p-surface-0) 78%, transparent);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border: 1px solid var(--p-surface-200);

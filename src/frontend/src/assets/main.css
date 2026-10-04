@@ -97,6 +97,19 @@ a:hover {
   background: var(--p-surface-100);
   color: #e2e5ec;
 }
+/* Solid primary buttons: lock the fill to the deep 600 step in both
+   modes (overrides Aura's dark-mode lightening). Accent-aware via
+   accents.ts; text/outlined variants already use accent text. */
+.dark .p-button:not(.p-button-secondary):not(.p-button-success):not(.p-button-info):not(.p-button-warn):not(.p-button-help):not(.p-button-danger):not(.p-button-contrast):not(.p-button-text):not(.p-button-outlined) {
+  background: var(--p-primary-600);
+  border-color: var(--p-primary-600);
+  color: #fff;
+}
+.dark .p-button:not(.p-button-secondary):not(.p-button-success):not(.p-button-info):not(.p-button-warn):not(.p-button-help):not(.p-button-danger):not(.p-button-contrast):not(.p-button-text):not(.p-button-outlined):not(:disabled):hover {
+  background: var(--p-primary-700);
+  border-color: var(--p-primary-700);
+  color: #fff;
+}
 .dark .p-toast-detail {
   color: #e2e5ec;
 }
@@ -178,8 +191,8 @@ a:hover {
   background: var(--p-surface-100);
 }
 .pop-row.sel {
-  background: var(--p-primary-50);
-  color: var(--p-primary-700);
+  background: color-mix(in srgb, var(--p-primary-600) 12%, transparent);
+  color: var(--p-primary-600);
 }
 
 /* ------------------------------------------------------------------
@@ -414,13 +427,9 @@ a:hover {
    Dark selected states. NOTE: `html.dark` (not just `.dark`) on purpose:
    the light rules they override live in scoped SFC styles, which come
    later in the bundle — a specificity tie would lose to them.
+   (Sidebar selected rows intentionally have no dark override: they share
+   the collapsed-rail tinted treatment in both modes.)
 ------------------------------------------------------------------- */
-html.dark .row.active,
-html.dark .rail-btn.active,
-html.dark .pop-row.sel {
-  background: color-mix(in srgb, var(--p-primary-500) 25%, transparent);
-  color: var(--p-primary-300);
-}
 html.dark .user-bubble {
   background: color-mix(in srgb, var(--p-primary-500) 22%, transparent);
   border-color: color-mix(in srgb, var(--p-primary-500) 42%, transparent);
@@ -431,4 +440,45 @@ html.dark .float-composer {
 }
 html.dark .float-composer:focus-within {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--p-primary-500) 35%, transparent);
+}
+
+/* Shared slim hover-reveal scrollbar (chat, sidebar, state panel,
+   library pages…): invisible at rest, visible on hover. One per column:
+   chat and card scroll independently, so the bar can't be shared. */
+.slim-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.slim-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+.slim-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.slim-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 99px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.slim-scroll:hover {
+  scrollbar-color: var(--p-surface-300) transparent;
+}
+.slim-scroll:hover::-webkit-scrollbar-thumb {
+  background: var(--p-surface-300);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.slim-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--p-surface-400);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+/* Keyboard-only accent focus ring (:focus-visible never fires on mouse
+   clicks). PrimeVue keeps its preset ring (same family); this covers our
+   native elements (rows, toggles, pills…), which had browser defaults. */
+:focus-visible {
+  outline: 2px solid var(--p-primary-600);
+  outline-offset: 2px;
 }

@@ -6,7 +6,7 @@
      plain header is used instead. -->
 <script setup lang="ts">
 import Button from 'primevue/button';
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { getDestinations } from '../../api/travelService';
 import { useTravelStore } from '../../stores/travel';
 import type { Destination } from '../../types';
@@ -56,6 +56,7 @@ function step(dir: number) {
 function onScroll() {
   const el = track.value;
   if (!el) return;
+  updateEdgeFades(el);
   const center = el.scrollLeft + el.clientWidth / 2;
   let best = 0;
   let bestDist = Infinity;
@@ -69,7 +70,27 @@ function onScroll() {
   active.value = best;
 }
 
-// Score ring geometry (r=18 -> circumference ~113.1).
+// Edge fades: instead of hard-clipping peeking cards, the track fades out
+// on the sides that still hide content (no fade at rest edges or when
+// everything fits). Recomputed on scroll, mount, resize and item changes.
+const EDGE_PX = 4;
+const fadeLeft = ref(false);
+const fadeRight = ref(false);
+function updateEdgeFades(el: HTMLElement) {
+  const max = el.scrollWidth - el.clientWidth;
+  fadeLeft.value = el.scrollLeft > EDGE_PX;
+  fadeRight.value = el.scrollLeft < max - EDGE_PX;
+}
+function refreshFades() {
+  if (track.value) updateEdgeFades(track.value);
+}
+onMounted(() => {
+  refreshFades();
+  window.addEventListener('resize', refreshFades);
+});
+onUnmounted(() => {
+  window.removeEventListener('resize', refreshFades);
+});
 const RING_CIRC = 2 * Math.PI * 18;
 function ringOffset(suitability: number): number {
   const s = Math.min(100, Math.max(0, suitability));
@@ -112,6 +133,8 @@ watch(
   items,
   (list) => {
     for (const d of list) void resolveImage(d);
+    // Card widths change once photos resolve: recompute after layout.
+    void nextTick(refreshFades);
   },
   { immediate: true }
 );
@@ -119,7 +142,7 @@ watch(
 
 <template>
   <div class="dest-carousel">
-    <div ref="track" class="dest-track" @scroll.passive="onScroll">
+    <div ref="track" class="dest-track" :class="{ 'fade-left': fadeLeft, 'fade-right': fadeRight }" @scroll.passive="onScroll">
       <div v-for="(d, i) in items" :key="d.id" class="dest-card" :class="{ first: i === 0 && !locked, selected: effective === d.name }">
         <div v-if="images[d.id]" class="hero">
           <img
@@ -219,11 +242,26 @@ watch(
   margin: 6px 0 4px;
 }
 .dest-track {
+  --fade: 32px;
   display: flex;
   gap: 12px;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   padding-bottom: 8px;
+}
+/* Edge fade instead of a hard clip on peeking cards. Mask only (no
+   layout change), vendor-prefixed for Safari. */
+.dest-track.fade-left {
+  -webkit-mask-image: linear-gradient(to right, transparent, black var(--fade));
+  mask-image: linear-gradient(to right, transparent, black var(--fade));
+}
+.dest-track.fade-right {
+  -webkit-mask-image: linear-gradient(to left, transparent, black var(--fade));
+  mask-image: linear-gradient(to left, transparent, black var(--fade));
+}
+.dest-track.fade-left.fade-right {
+  -webkit-mask-image: linear-gradient(to right, transparent, black var(--fade), black calc(100% - var(--fade)), transparent);
+  mask-image: linear-gradient(to right, transparent, black var(--fade), black calc(100% - var(--fade)), transparent);
 }
 .dest-card {
   flex: 0 0 82%;
