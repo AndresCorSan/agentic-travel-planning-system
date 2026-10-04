@@ -5,8 +5,6 @@ from app.agents.subagents._base import SubagentState, build_subagent_graph
 from app.agents.usage import collect_usage
 from app.agents.utils import current_date_message, sanitize_messages_for_llm
 
-from app.agents.utils import sanitize_messages_for_llm
-
 WEATHER_AGENT_PROMPT = """
 You are the weather research specialist in a travel-planning system.
 

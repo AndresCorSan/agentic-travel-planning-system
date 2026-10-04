@@ -2,7 +2,7 @@
 
 The title is generated once, after the graph runs, and only when the
 turn carries enough context (a bare "hi" must not freeze the title).
-Manual renames leave the AUTO_TITLES set, so they are never overwritten.
+Manual renames leave the default title behind, so they are never overwritten.
 Any LLM failure returns None: the previous title is kept.
 """
 import json
@@ -10,9 +10,10 @@ import json
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.ai_models import light_llm
+from app.agents.state import get_field
 from app.agents.usage import message_usage
 
-AUTO_TITLES = ("New trip", "Untitled trip")
+DEFAULT_CONVERSATION_TITLE = "New trip"
 
 TITLE_SYSTEM_PROMPT = (
     "Generate a short chat title for a travel-planning conversation. "
@@ -28,12 +29,11 @@ def has_title_context(message: str, requirements, candidates) -> bool:
     if candidates:
         return True
     if requirements is not None:
-        get = lambda name: getattr(requirements, name, None) if not isinstance(requirements, dict) else requirements.get(name)
-        scalar = any(get(n) for n in ("origin", "destination", "travel_dates", "duration_days", "travelers", "budget", "currency", "transport_mode", "accommodation_type"))
+        scalar = any(get_field(requirements, n) for n in ("origin", "destination", "travel_dates", "duration_days", "travelers", "budget", "currency", "transport_mode", "accommodation_type"))
         if scalar:
             return True
         for n in ("interests", "constraints"):
-            v = get(n)
+            v = get_field(requirements, n)
             if isinstance(v, list) and any(str(x).strip() for x in v):
                 return True
     text = (message or "").strip().lower()
@@ -61,8 +61,7 @@ async def generate_title(message: str, requirements, candidates) -> tuple[str | 
         if candidates:
             names = []
             for c in candidates[:5]:
-                get = lambda n: getattr(c, n, None) if not isinstance(c, dict) else c.get(n)
-                name = get("destination")
+                name = get_field(c, "destination")
                 if name:
                     names.append(str(name))
             if names:

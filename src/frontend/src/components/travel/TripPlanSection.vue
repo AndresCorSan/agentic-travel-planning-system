@@ -39,7 +39,7 @@ const lineDetail = (item: PlanItem) => {
   // Per-person items show the per-person rate below the trip total,
   // same "/ unit" style as the per-night and per-day hints.
   if (item.per_person && props.travelers && props.travelers > 1) {
-    return `${formatOptionPrice({ price, currency, per_person: false })} pp`;
+    return formatOptionPrice({ price, currency, per_person: true });
   }
   // Accommodation shows the per-night rate below the stay total.
   if (item.category === 'accommodation') {

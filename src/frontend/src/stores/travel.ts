@@ -5,7 +5,7 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import * as service from '../api/travelService';
 import { AGENT_LABELS, AGENT_RESEARCH_KEY, SAVED_CHOICES_PREFIX } from '../api/stream';
-import { groupLabel } from '../components/chat/richtext';
+import { categoryLabel, groupLabel } from '../components/chat/richtext';
 import type { SubagentResult, AgentRow, BudgetSummary, ChatMessage, Conversation, PlanItem, PlanOption, PlanUpdate, ResearchStatus, RequirementItem, SavedPlan, StreamEvent } from '../types';
 import { SINGLE_CHOICE_CATEGORIES } from '../types';
 
@@ -101,8 +101,7 @@ export const useTravelStore = defineStore('travel', () => {
         return idx < 0 ? 99 : idx;
       };
       const catLabel = (c: string, g: string) => {
-        const words = c.replace(/_/g, ' ');
-        const base = words.charAt(0).toUpperCase() + words.slice(1);
+        const base = categoryLabel(c);
         return g ? `${base} (${groupLabel(g)})` : base;
       };
       const named = choices.map((c, i) => ({
@@ -204,7 +203,7 @@ export const useTravelStore = defineStore('travel', () => {
     // backend ensures its own row too), so empty trips are never stored.
     const library = useLibraryStore();
     if (!library.conversations.some((c) => c.id === conversationId.value)) {
-      library.addConversation('Untitled trip', conversationId.value);
+      library.addConversation('New trip', conversationId.value);
     }
     const pending = service.createPendingUser(text);
     cache.value[pending.id] = pending;

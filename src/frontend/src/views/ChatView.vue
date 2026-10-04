@@ -16,15 +16,14 @@ const library = useLibraryStore();
 const ui = useUiStore();
 
 const title = computed(
-  () => library.conversations.find((c) => c.id === props.id)?.title ?? 'Trip'
+  () => library.conversations.find((c) => c.id === props.id)?.title ?? 'New trip'
 );
 // The upper title only appears once the trip has a real title: fresh threads
-// (no stored row, or still carrying the 'Untitled trip' placeholder)
+// (no stored row, or still carrying the 'New trip' placeholder)
 // show the bare hero instead.
-const DEFAULT_TITLES = new Set(['Trip', 'Untitled trip']);
 const showTitle = computed(() => {
   const found = library.conversations.find((c) => c.id === props.id);
-  return !!found && !DEFAULT_TITLES.has(found.title);
+  return !!found && found.title !== 'New trip';
 });
 
 const chosenDestination = computed(() => travel.requirements.find((r) => r.key === 'destination')?.value ?? null);

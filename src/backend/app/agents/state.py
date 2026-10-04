@@ -108,9 +108,19 @@ class PlanItem(BaseModel):
 SINGLE_CHOICE_CATEGORIES = ("transportation", "accommodation", "rental_car")
 
 
+def get_field(obj, name: str, default=None):
+    """Read a field from a pydantic model or a plain dict.
+
+    Graph state mixes both shapes after `aupdate_state`, so every mapper
+    needs this instead of its own `getattr or .get` lambda.
+    """
+    if isinstance(obj, dict):
+        return obj.get(name, default)
+    return getattr(obj, name, default)
+
+
 def _opt_group(opt) -> str:
-    get = lambda name: getattr(opt, name, None) if not isinstance(opt, dict) else opt.get(name)
-    return str(get("group") or "").strip()
+    return str(get_field(opt, "group") or "").strip()
 
 
 def _merge_options(

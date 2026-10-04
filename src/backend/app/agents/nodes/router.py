@@ -1,9 +1,9 @@
 from typing import Literal
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import SystemMessage
 from pydantic import BaseModel
 from app.agents.ai_models import JEV_CONFIDENCE_THRESHOLD, decide_route_via_jev, light_llm
 from app.agents.state import TravelState
-from app.agents.tools.plan import SAVED_CHOICES_PREFIX
+from app.agents.tools.plan import is_ui_choices_confirmation
 from app.agents.usage import collect_usage
 from app.agents.utils import sanitize_messages_for_llm
 
@@ -83,7 +83,7 @@ async def research_router(state: TravelState):
     messages = state.get("messages") or []
     # Saved-choices confirmations only need the main LLM to acknowledge:
     # skip the routing call and go straight there.
-    if messages and isinstance(messages[-1], HumanMessage) and str(messages[-1].content or "").startswith(SAVED_CHOICES_PREFIX):
+    if is_ui_choices_confirmation(messages):
         return {"next_step": "main_llm"}
 
     # Fast path: Jev decision model via OpenRouter (no text generation).
@@ -110,7 +110,7 @@ async def research_router(state: TravelState):
     # Fallback: structured output from the chat LLM
     result = await structured_router_llm.ainvoke([
         SystemMessage(content=RESEARCH_ROUTER_PROMPT),
-        *sanitize_messages_for_llm(state["messages"]),
+        *sanitized,
     ])
     if result.get("parsing_error") is not None:
         raise result["parsing_error"]

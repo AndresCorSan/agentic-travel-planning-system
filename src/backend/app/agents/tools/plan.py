@@ -1,13 +1,35 @@
 import json
 from langchain.tools import tool, ToolRuntime
-from langchain_core.messages import ToolMessage
+from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.types import Command
-from app.agents.state import PlanItem, PlanOption, SINGLE_CHOICE_CATEGORIES
+from app.agents.state import PlanItem, PlanOption, SINGLE_CHOICE_CATEGORIES, get_field
 
 # First line of the user message for UI button saves (POST /choices +
 # normal send, like "Let's go with…"). extract + router short-circuit on
 # it so the turn goes straight to main_llm with no extra LLM calls.
 SAVED_CHOICES_PREFIX = "I'll go with:"
+
+
+def is_ui_choices_confirmation(messages) -> bool:
+    """True when the latest message confirms UI button choices.
+
+    After a subagent search the user picks one or more options with the
+    UI buttons. The frontend already saved them deterministically via
+    POST /choices (see trip_plan in tools/plan.py) and then sends this
+    machine-generated message ("I'll go with: ...") through the normal
+    pipeline so the assistant acknowledges them.
+
+    extract + router short-circuit on it straight to main_llm: there is
+    nothing new to extract (the plan is already updated, an extraction
+    LLM call would be wasted) and nothing to route (the destination is
+    settled, so the Jev + router LLM calls would only conclude main_llm).
+    main_llm then replies using the saved plan.
+    """
+    return bool(
+        messages
+        and isinstance(messages[-1], HumanMessage)
+        and str(messages[-1].content or "").startswith(SAVED_CHOICES_PREFIX)
+    )
 
 
 def _normalize_options(value) -> list[dict]:
@@ -38,21 +60,20 @@ def plan_total(items: list, travelers: int | None = None) -> tuple[float, str | 
     total = 0.0
     currencies: dict[str, int] = {}
     for it in items or []:
-        get = lambda name: getattr(it, name, None) if not isinstance(it, dict) else it.get(name)
-        price = get("price")
+        price = get_field(it, "price")
         if price is None:
             continue
         try:
             amount = float(price)
         except (TypeError, ValueError):
             continue
-        if get("per_person") and travelers:
+        if get_field(it, "per_person") and travelers:
             try:
                 amount *= int(travelers)
             except (TypeError, ValueError):
                 pass
         total += amount
-        code = (get("currency") or "").strip().upper() or "?"
+        code = (get_field(it, "currency") or "").strip().upper() or "?"
         currencies[code] = currencies.get(code, 0) + 1
     currency = max(currencies, key=currencies.get) if currencies else None
     if currency == "?":
@@ -149,8 +170,7 @@ def _resolve_option(category: str, option_id: str | None, state) -> PlanOption |
     if not option_id:
         return None
     for opt in (state.get("available_options") or {}).get(category, []):
-        get = lambda name: getattr(opt, name, None) if not isinstance(opt, dict) else opt.get(name)
-        if str(get("id")) == str(option_id):
+        if str(get_field(opt, "id")) == str(option_id):
             return opt if isinstance(opt, PlanOption) else PlanOption(**opt)
     return None
 

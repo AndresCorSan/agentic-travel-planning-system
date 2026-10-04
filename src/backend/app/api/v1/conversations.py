@@ -2,6 +2,7 @@ import json
 import time
 import uuid
 from datetime import datetime, timezone
+from functools import partial
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -11,8 +12,8 @@ from pydantic import BaseModel
 
 from app.core.dependencies import get_graph
 from app.agents.ai_models import light_llm
-from app.api.v1.titles import AUTO_TITLES, generate_title, has_title_context
-from app.agents.state import PlanItem, SINGLE_CHOICE_CATEGORIES
+from app.api.v1.titles import DEFAULT_CONVERSATION_TITLE, generate_title, has_title_context
+from app.agents.state import PlanItem, SINGLE_CHOICE_CATEGORIES, get_field
 from app.agents.usage import sum_entries, sum_turn_usage
 from app.agents.tools.plan import plan_total
 from app.database.database import AsyncSessionLocal
@@ -20,9 +21,13 @@ from app.database import repositories as repo
 
 router = APIRouter()
 
+# Intro line for destination candidate cards. Sent live over SSE and
+# persisted for rehydrate — one constant so reloads show the same text.
+DESTINATIONS_INTRO_TEXT = "Here are my top picks — choose one or tell me what to adjust."
+
 
 class CreateConversationRequest(BaseModel):
-    title: str = "New trip"
+    title: str = DEFAULT_CONVERSATION_TITLE
     id: str | None = None
 
 
@@ -133,18 +138,14 @@ def _format_budget(budget, currency) -> str | None:
 
 def _option_to_dict(opt) -> dict:
     """PlanOption (pydantic or dict) -> frontend payload."""
-    get = lambda name, default=None: (
-        getattr(opt, name, default)
-        if not isinstance(opt, dict) else opt.get(name, default)
-    )
     return {
-        "id": str(get("id", "")),
-        "label": get("label", "") or "",
-        "price": get("price"),
-        "currency": get("currency"),
-        "per_person": bool(get("per_person", False)),
-        "details": get("details", "") or "",
-        "group": str(get("group", "") or ""),
+        "id": str(get_field(opt, "id", "")),
+        "label": get_field(opt, "label", "") or "",
+        "price": get_field(opt, "price"),
+        "currency": get_field(opt, "currency"),
+        "per_person": bool(get_field(opt, "per_person", False)),
+        "details": get_field(opt, "details", "") or "",
+        "group": str(get_field(opt, "group", "") or ""),
     }
 
 
@@ -152,24 +153,19 @@ def _plan_payload(values: dict) -> dict:
     """Trip plan + deterministic total for the Plan panel / Budget."""
     raw_plan = (values or {}).get("trip_plan") or []
     req = (values or {}).get("requirements")
-    get = lambda name: getattr(req, name, None) if not isinstance(req, dict) else (req or {}).get(name)
-    travelers = get("travelers")
-    budget = get("budget")
+    travelers = get_field(req, "travelers")
+    budget = get_field(req, "budget")
     items = []
     for it in raw_plan:
-        get_it = lambda name, default=None: (
-            getattr(it, name, default)
-            if not isinstance(it, dict) else it.get(name, default)
-        )
         items.append({
-            "category": get_it("category"),
-            "option_id": str(get_it("option_id", "")),
-            "label": get_it("label", "") or "",
-            "price": get_it("price"),
-            "currency": get_it("currency"),
-            "per_person": bool(get_it("per_person", False)),
-            "details": get_it("details", "") or "",
-            "group": str(get_it("group", "") or ""),
+            "category": get_field(it, "category"),
+            "option_id": str(get_field(it, "option_id", "")),
+            "label": get_field(it, "label", "") or "",
+            "price": get_field(it, "price"),
+            "currency": get_field(it, "currency"),
+            "per_person": bool(get_field(it, "per_person", False)),
+            "details": get_field(it, "details", "") or "",
+            "group": str(get_field(it, "group", "") or ""),
         })
     total, currency = plan_total(raw_plan, travelers)
     return {
@@ -183,23 +179,19 @@ def _plan_payload(values: dict) -> dict:
 
 def _candidate_to_card(candidate, index: int) -> dict:
     """DestinationCandidate (pydantic or dict) -> frontend Destination card."""
-    get = lambda name, default=None: (
-        getattr(candidate, name, default)
-        if not isinstance(candidate, dict) else candidate.get(name, default)
-    )
-    score = get("score", 0) or 0
-    code = (get("country_code", "") or "").strip().lower()
+    score = get_field(candidate, "score", 0) or 0
+    code = (get_field(candidate, "country_code", "") or "").strip().lower()
     if len(code) != 2 or not code.isalpha():
         code = ""
     return {
         "id": f"dest-{index}",
-        "name": get("destination", "Unknown"),
-        "country": get("country", "") or "",
+        "name": get_field(candidate, "destination", "Unknown"),
+        "country": get_field(candidate, "country", "") or "",
         "country_code": code,
-        "tagline": get("reason", "") or "",
-        "highlights": get("highlights", []) or [],
+        "tagline": get_field(candidate, "reason", "") or "",
+        "highlights": get_field(candidate, "highlights", []) or [],
         "suitability": int(round(float(score) * 10)),
-        "drawback": get("drawback", "") or "",
+        "drawback": get_field(candidate, "drawback", "") or "",
     }
 
 
@@ -207,7 +199,7 @@ def _requirements_to_items(req) -> list[dict]:
     """TravelRequirements -> RequirementItem[] for the Travel State panel."""
     if req is None:
         return []
-    get = lambda name: getattr(req, name, None) if not isinstance(req, dict) else req.get(name)
+    get = partial(get_field, req)
     destination = get("destination")
     origin = get("origin")
     travel_dates = get("travel_dates")
@@ -357,7 +349,7 @@ async def _stream(graph, conversation_id: str, message: str):
                                     "id": f"m{uuid.uuid4().hex[:8]}",
                                     "role": "assistant",
                                     "kind": "destinations",
-                                    "text": "Here are my top picks — choose one or tell me what to adjust.",
+                                    "text": DESTINATIONS_INTRO_TEXT,
                                     "destinations": cards,
                                     "createdAt": datetime.now(timezone.utc).isoformat(),
                                 }
@@ -432,7 +424,7 @@ async def _stream(graph, conversation_id: str, message: str):
             try:
                 async with AsyncSessionLocal() as session:
                     conv = await repo.ensure_conversation(session, conversation_id)
-                    if conv.title in AUTO_TITLES:
+                    if conv.title == DEFAULT_CONVERSATION_TITLE:
                         req = values.get("requirements")
                         cands = values.get("destination_candidates") or []
                         if has_title_context(message, req, cands):
@@ -520,7 +512,7 @@ async def _stream(graph, conversation_id: str, message: str):
                 for card in assistant_cards:
                     await repo.add_message(
                         session, conversation_id, "assistant", "destinations",
-                        "Here are my top picks — choose one or tell me what to adjust.",
+                        DESTINATIONS_INTRO_TEXT,
                         _payload(card),
                     )
                 for text in interrupt_texts:
@@ -531,7 +523,7 @@ async def _stream(graph, conversation_id: str, message: str):
                 # here unless someone renamed the conversation in between.
                 if title_event is not None:
                     conv = await repo.ensure_conversation(session, conversation_id)
-                    if conv.title in AUTO_TITLES or conv.title == title_event["title"]:
+                    if conv.title == DEFAULT_CONVERSATION_TITLE or conv.title == title_event["title"]:
                         conv.title = title_event["title"][:60]
                 await session.commit()
         except Exception:
@@ -569,10 +561,7 @@ async def save_choices(conversation_id: str, body: SaveChoicesRequest, graph=Dep
 
     def find(category: str, option_id: str):
         for opt in avail.get(category, []) or []:
-            get = lambda name, default=None: (
-                getattr(opt, name, default)
-                if not isinstance(opt, dict) else opt.get(name, default)
-            )
+            get = partial(get_field, opt)
             if str(get("id")) == str(option_id):
                 return get
         return None
@@ -670,7 +659,7 @@ async def list_conversations():
 async def create_conversation(body: CreateConversationRequest):
     conversation_id = body.id.strip() if body.id and body.id.strip() else f"trip-{uuid.uuid4().hex[:8]}"
     async with AsyncSessionLocal() as session:
-        conv = await repo.ensure_conversation(session, conversation_id, body.title or "New trip")
+        conv = await repo.ensure_conversation(session, conversation_id, body.title or DEFAULT_CONVERSATION_TITLE)
         await session.commit()
         return _conv_to_dict(conv)
 
@@ -702,7 +691,7 @@ async def get_conversation_state(conversation_id: str, graph=Depends(get_graph))
 @router.patch("/conversations/{conversation_id}")
 async def rename_conversation(conversation_id: str, body: RenameConversationRequest):
     async with AsyncSessionLocal() as session:
-        conv = await repo.rename_conversation(session, conversation_id, body.title.strip() or "Untitled trip")
+        conv = await repo.rename_conversation(session, conversation_id, body.title.strip() or DEFAULT_CONVERSATION_TITLE)
         if conv is None:
             raise HTTPException(status_code=404, detail="Conversation not found")
         await session.commit()
