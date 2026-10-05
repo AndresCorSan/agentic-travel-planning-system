@@ -27,6 +27,9 @@ export interface ChatMessage {
       on assistant messages created after the stats feature; absent on
       older history and on user messages. */
   stats?: MessageStats;
+  /** Frontend-only: stream failure bubble (send() catch). Rendered with
+      the error style; the backend never sends this. */
+  error?: boolean;
 }
 
 /** Token / cost / timing metadata for one assistant turn. */

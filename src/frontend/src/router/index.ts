@@ -21,9 +21,10 @@ export const router = createRouter({
   ]
 });
 
-// Block trip-to-trip navigation mid-reply: stream events would leak into the wrong thread.
+// Block leaving a trip mid-reply: stream events would leak into the wrong
+// thread (or keep mutating the store from an unmounted view).
 router.beforeEach((to, from) => {
-  if (to.name === 'trip' && from.name === 'trip' && to.params.id !== from.params.id) {
+  if (from.name === 'trip' && to.params.id !== from.params.id) {
     if (useTravelStore().loading) return false;
   }
   return true;

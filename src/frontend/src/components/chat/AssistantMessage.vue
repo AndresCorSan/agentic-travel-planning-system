@@ -57,7 +57,7 @@ function onSave() {
 </script>
 
 <template>
-  <div class="ai-row">
+  <div class="ai-row" :class="{ 'is-error': message.error }">
     <div class="avatar">AI</div>
     <div class="ai-body">
       <SubagentResults v-if="message.subagentResults?.length" :results="message.subagentResults" />
@@ -105,6 +105,15 @@ function onSave() {
 .ai-body {
   flex: 1;
   min-width: 0;
+}
+/* Stream failure bubble: soft error tint.
+   color-mix over theme reds so dark mode keeps working. */
+.is-error .ai-body {
+  border-left: 3px solid var(--p-red-500);
+  padding-left: 12px;
+}
+.is-error .prose {
+  color: var(--p-red-700);
 }
 /* .prose rich-text styles live in main.css (shared with ItineraryBlock). */
 .save-bar {

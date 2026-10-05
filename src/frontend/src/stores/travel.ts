@@ -217,7 +217,25 @@ export const useTravelStore = defineStore('travel', () => {
       streaming.value = null;
       pendingResults = [];
       pendingTurnOptions = [];
-      for await (const ev of service.streamMessage(conversationId.value, text)) applyEvent(ev);
+      try {
+        for await (const ev of service.streamMessage(conversationId.value, text)) applyEvent(ev);
+      } catch (err) {
+        // Stream error (backend `error` event, network cut…): keep the user's message 
+        // so it can be retried, and show the failure as an assistant bubble.
+        keepPending = true;
+        const failed: ChatMessage = {
+          id: `e${Date.now().toString(36)}`,
+          role: 'assistant',
+          kind: 'text',
+          text: err instanceof Error && err.message
+            ? err.message
+            : 'Something went wrong. Please try again.',
+          createdAt: new Date().toISOString(),
+          error: true,
+        };
+        cache.value[failed.id] = failed;
+        messageIds.value.push(failed.id);
+      }
       streaming.value = null;
       keepPending = true;
       // Keep the sidebar row fresh (the backend emits `title.updated`
