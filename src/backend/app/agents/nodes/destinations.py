@@ -1,10 +1,13 @@
 from langchain_core.messages import HumanMessage, SystemMessage
+import logging
 from langgraph.types import interrupt
 from pydantic import BaseModel
 from app.agents.ai_models import llm
 from app.agents.state import DestinationCandidate, TravelState
 from app.agents.usage import collect_usage
 from app.agents.utils import sanitize_messages_for_llm
+
+logger = logging.getLogger("uvicorn.error")
 
 DESTINATION_RESEARCH_PROMPT = """
 You are the destination discovery step of a travel planner.
@@ -43,7 +46,7 @@ destination_llm = llm.with_structured_output(
     include_raw=True,
 )
 
-async def destination_research(state: TravelState):
+async def destination_research(state: TravelState, config: dict | None = None):
     requirements = state["requirements"]
 
     result = await destination_llm.ainvoke([
@@ -54,8 +57,15 @@ async def destination_research(state: TravelState):
     if result.get("parsing_error") is not None:
         raise result["parsing_error"]
 
+    candidates = result["parsed"].candidates
+    logger.info(
+        "[%s] destination_research: %d candidates (%s)",
+        (config or {}).get("configurable", {}).get("thread_id", "?"),
+        len(candidates),
+        ", ".join(getattr(c, "destination", "?") for c in candidates),
+    )
     return {
-        "destination_candidates": result["parsed"].candidates,
+        "destination_candidates": candidates,
         "turn_usage": collect_usage([result["raw"]], "destination_research"),
     }
 

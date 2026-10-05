@@ -44,7 +44,7 @@ requirements_llm = low_reasoning_llm.with_structured_output(
 )
 
 
-async def extract_requirements(state: TravelState):
+async def extract_requirements(state: TravelState, config: dict | None = None):
     messages = state.get("messages") or []
     # Saved-choices confirmations carry no new requirements and already
     # updated the plan deterministically: skip the LLM call entirely.
@@ -59,7 +59,14 @@ async def extract_requirements(state: TravelState):
         logger.warning("Requirements extraction unparseable; keeping previous")
         return {"turn_usage": collect_usage([result["raw"]], "extract_requirements")}
 
+    req = result["parsed"]
+    filled = {k: v for k, v in req.model_dump().items() if v}
+    logger.info(
+        "[%s] extract: requirements %s",
+        (config or {}).get("configurable", {}).get("thread_id", "?"),
+        filled,
+    )
     return {
-        "requirements": result["parsed"],
+        "requirements": req,
         "turn_usage": collect_usage([result["raw"]], "extract_requirements"),
     }

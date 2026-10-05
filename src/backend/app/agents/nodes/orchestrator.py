@@ -60,7 +60,7 @@ orchestrator_llm = llm.with_structured_output(
     include_raw=True,
 )
 
-async def orchestrator(state: TravelState):
+async def orchestrator(state: TravelState, config: dict | None = None):
     requirements = state["requirements"]
     agents = "\n".join(f"- {name}: {AGENT_DESCRIPTIONS[name]}" for name in AVAILABLE_AGENTS)
 
@@ -84,6 +84,12 @@ async def orchestrator(state: TravelState):
         tasks = []
     else:
         tasks = parsed.tasks
+    logger.info(
+        "[%s] orchestrator: %d tasks (%s)",
+        (config or {}).get("configurable", {}).get("thread_id", "?"),
+        len(tasks),
+        ", ".join(t.agent for t in tasks),
+    )
     return {
         "orchestration_plan": tasks,
         "turn_usage": usage,

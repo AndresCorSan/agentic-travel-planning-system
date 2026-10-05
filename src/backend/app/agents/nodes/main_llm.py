@@ -1,10 +1,13 @@
 from langchain_core.messages import SystemMessage
+import logging
 from app.agents.ai_models import llm
 from app.agents.state import TravelState
 from app.agents.tools.plan import add_plan_item, present_options, remove_plan_item
 from app.agents.tools.requirements import update_requirements
 from app.agents.usage import collect_usage
 from app.agents.utils import current_date_message, sanitize_messages_for_llm
+
+logger = logging.getLogger("uvicorn.error")
 
 MAIN_LLM_PROMPT = """
 You are a Travel Planner specialized in personalized trip planning.
@@ -104,7 +107,7 @@ Scope:
 main_tools = [update_requirements, present_options, add_plan_item, remove_plan_item]
 main_llm = llm.bind_tools(main_tools)
 
-async def main_llm_node(state: TravelState) -> dict:
+async def main_llm_node(state: TravelState, config: dict | None = None) -> dict:
     # Extract results from each sub-agent and format them for the main LLM.
     subagents_results = []
 
@@ -172,6 +175,13 @@ async def main_llm_node(state: TravelState) -> dict:
 
     response = await main_llm.ainvoke(messages)
 
+    tools = [getattr(c, "name", "?") for c in getattr(response, "tool_calls", None) or []]
+    logger.info(
+        "[%s] main_llm: reply %d chars%s",
+        (config or {}).get("configurable", {}).get("thread_id", "?"),
+        len(str(getattr(response, "content", "") or "")),
+        f" tools={tools}" if tools else "",
+    )
     return {
         "messages": [response],
         "turn_usage": collect_usage([response], "main_llm"),

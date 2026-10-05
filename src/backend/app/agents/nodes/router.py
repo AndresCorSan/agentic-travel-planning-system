@@ -82,11 +82,13 @@ structured_router_llm = light_llm.with_structured_output(
     include_raw=True,
 )
 
-async def research_router(state: TravelState):
+async def research_router(state: TravelState, config: dict | None = None):
+    tid = (config or {}).get("configurable", {}).get("thread_id", "?")
     messages = state.get("messages") or []
     # Saved-choices confirmations only need the main LLM to acknowledge:
     # skip the routing call and go straight there.
     if is_ui_choices_confirmation(messages):
+        logger.info("[%s] router: route=main_llm (choices confirmation)", tid)
         return {"next_step": "main_llm"}
 
     # Fast path: Jev decision model via OpenRouter (no text generation).
@@ -108,6 +110,7 @@ async def research_router(state: TravelState):
     if jev_result is not None:
         choice, confidence = jev_result
         if confidence >= JEV_CONFIDENCE_THRESHOLD:
+            logger.info("[%s] router: route=%s (via jev, conf=%.2f)", tid, choice, confidence)
             return {"next_step": choice}
 
     # Fallback: structured output from the chat LLM
@@ -119,6 +122,7 @@ async def research_router(state: TravelState):
         logger.warning("Router decision unparseable; falling back to main_llm")
         return {"turn_usage": collect_usage([result["raw"]], "router")}
 
+    logger.info("[%s] router: route=%s (via chat llm)", tid, result["parsed"].route)
     return {
         "next_step": result["parsed"].route,
         "turn_usage": collect_usage([result["raw"]], "router"),
