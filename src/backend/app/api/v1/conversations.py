@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 import uuid
 from datetime import datetime, timezone
@@ -13,13 +14,15 @@ from pydantic import BaseModel
 from app.core.dependencies import get_graph
 from app.agents.ai_models import light_llm
 from app.api.v1.titles import DEFAULT_CONVERSATION_TITLE, generate_title, has_title_context
-from app.agents.state import PlanItem, SINGLE_CHOICE_CATEGORIES, get_field
+from app.agents.state import PlanItem, SINGLE_CHOICE_CATEGORIES, get_field, _norm_group
 from app.agents.usage import sum_entries, sum_turn_usage
 from app.agents.tools.plan import plan_total
 from app.database.database import AsyncSessionLocal
 from app.database import repositories as repo
 
 router = APIRouter()
+
+logger = logging.getLogger("uvicorn.error")
 
 # Intro line for destination candidate cards. Sent live over SSE and
 # persisted for rehydrate — one constant so reloads show the same text.
@@ -269,7 +272,7 @@ async def _stream(graph, conversation_id: str, message: str):
             await repo.add_message(session, conversation_id, "user", "text", message)
             await session.commit()
     except Exception:
-        pass
+        logger.warning("Persist user turn failed for %s", conversation_id, exc_info=True)
     assistant_texts: list[str] = []
     assistant_cards: list[dict] = []
     agent_results: dict[str, str] = {}
@@ -527,7 +530,7 @@ async def _stream(graph, conversation_id: str, message: str):
                         conv.title = title_event["title"][:60]
                 await session.commit()
         except Exception:
-            pass
+            logger.warning("Persist assistant turn failed for %s", conversation_id, exc_info=True)
         if title_event is not None:
             yield _frame("title.updated", title_event)
         yield "event: done\ndata: {}\n\n"
@@ -574,7 +577,7 @@ async def save_choices(conversation_id: str, body: SaveChoicesRequest, graph=Dep
                 status_code=422,
                 detail=f"Unknown option '{ch.option_id}' for category '{ch.category}'",
             )
-        group = str(get("group", "") or "")
+        group = _norm_group(get("group", ""))
         item = PlanItem(
             category=ch.category,
             option_id=str(ch.option_id),
@@ -587,7 +590,7 @@ async def save_choices(conversation_id: str, body: SaveChoicesRequest, graph=Dep
         )
         key = lambda it: (
             it["category"] if isinstance(it, dict) else it.category,
-            str((it["group"] if isinstance(it, dict) else it.group) or ""),
+            _norm_group(it["group"] if isinstance(it, dict) else it.group),
             str(it["option_id"] if isinstance(it, dict) else it.option_id),
         )
         if ch.category in SINGLE_CHOICE_CATEGORIES:
@@ -711,7 +714,7 @@ async def delete_conversation(conversation_id: str, graph=Depends(get_graph)):
             if checkpointer is not None and hasattr(checkpointer, "adelete_thread"):
                 await checkpointer.adelete_thread(conversation_id)
         except Exception:
-            pass
+            logger.warning("Checkpoint delete failed for %s", conversation_id, exc_info=True)
     return {"deleted": conversation_id}
 
 

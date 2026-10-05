@@ -38,7 +38,16 @@ LIGHT_LLM_FALLBACKS = [
 
 
 def _status_code(exc: Exception) -> int | None:
-    return getattr(exc, "status_code", None)
+    # 429s arrive in several shapes (status_code attr, status attr, or
+    # plain text) — same broad check as conversations.py uses for its
+    # error frame. Missing one means the retry+fallback never engages.
+    for attr in ("status_code", "status"):
+        code = getattr(exc, attr, None)
+        if isinstance(code, int):
+            return code
+    if "429" in str(exc):
+        return 429
+    return None
 
 
 class ResilientChatOpenRouter(ChatOpenRouter):

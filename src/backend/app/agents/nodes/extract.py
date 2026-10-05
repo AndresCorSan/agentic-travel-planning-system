@@ -1,9 +1,12 @@
 from langchain_core.messages import SystemMessage
+import logging
 from app.agents.ai_models import low_reasoning_llm
 from app.agents.state import TravelRequirements, TravelState
 from app.agents.tools.plan import is_ui_choices_confirmation
 from app.agents.usage import collect_usage
 from app.agents.utils import current_date_message, sanitize_messages_for_llm
+
+logger = logging.getLogger("uvicorn.error")
 
 REQUIREMENTS_EXTRACTION_PROMPT = """
 Extract the user's explicit travel requirements into the provided schema.
@@ -53,7 +56,8 @@ async def extract_requirements(state: TravelState):
         *sanitize_messages_for_llm(state["messages"]),
     ])
     if result.get("parsing_error") is not None:
-        raise result["parsing_error"]
+        logger.warning("Requirements extraction unparseable; keeping previous")
+        return {"turn_usage": collect_usage([result["raw"]], "extract_requirements")}
 
     return {
         "requirements": result["parsed"],

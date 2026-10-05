@@ -46,14 +46,17 @@ class SavedPlan(Base):
     """Snapshot of a conversation (phase 8): requirements + trip plan + budget.
 
     One row per save — if the user keeps chatting and saves again it is a
-    new row, a photo of that moment, never an update of a previous one."""
+    new row, a photo of that moment, never an update of a previous one.
+
+    Deliberately independent from conversations: no ForeignKey, so plans
+    survive their conversation being deleted (deleting a trip must never
+    take its saved plans with it).
+    """
 
     __tablename__ = "saved_plans"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    conversation_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("conversations.id", ondelete="CASCADE"), index=True
-    )
+    conversation_id: Mapped[str] = mapped_column(String(64), index=True)
     title: Mapped[str] = mapped_column(String(200), default="Saved trip")
     description: Mapped[str] = mapped_column(Text, default="")
     requirements: Mapped[list | None] = mapped_column(JSON, nullable=True)

@@ -92,7 +92,13 @@ async def orchestrator(state: TravelState):
 
 def route_to_agents(state: TravelState):
     """Fan-out: Send each AgentTask to its specialist subagent."""
-    tasks = [t for t in (state.get("orchestration_plan") or []) if t.agent in AVAILABLE_AGENTS]
+    plan = state.get("orchestration_plan") or []
+    tasks = [t for t in plan if t.agent in AVAILABLE_AGENTS]
+    if len(tasks) < len(plan):
+        logger.warning(
+            "Orchestrator dropped unavailable agents: %s",
+            sorted({t.agent for t in plan} - {t.agent for t in tasks}),
+        )
     if not tasks:
         return "main_llm"
     return [

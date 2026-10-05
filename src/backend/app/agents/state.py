@@ -119,8 +119,18 @@ def get_field(obj, name: str, default=None):
     return getattr(obj, name, default)
 
 
+def _norm_group(value) -> str:
+    """Canonical group label: stripped + lowercase.
+
+    Groups come from the LLM ("Outbound" vs "outbound") and act as
+    replacement keys in add/merge — normalize once so casing never
+    splits a leg in two. Display re-capitalizes (frontend groupLabel).
+    """
+    return str(value or "").strip().lower()
+
+
 def _opt_group(opt) -> str:
-    return str(get_field(opt, "group") or "").strip()
+    return _norm_group(get_field(opt, "group"))
 
 
 def _merge_options(

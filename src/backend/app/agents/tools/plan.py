@@ -2,7 +2,7 @@ import json
 from langchain.tools import tool, ToolRuntime
 from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.types import Command
-from app.agents.state import PlanItem, PlanOption, SINGLE_CHOICE_CATEGORIES, get_field
+from app.agents.state import PlanItem, PlanOption, SINGLE_CHOICE_CATEGORIES, get_field, _norm_group
 
 # First line of the user message for UI button saves (POST /choices +
 # normal send, like "Let's go with…"). extract + router short-circuit on
@@ -129,7 +129,7 @@ def present_options(runtime: ToolRuntime, category: str, options: list[dict] | s
                 ],
             }
         )
-    call_group = str(group or "").strip()
+    call_group = _norm_group(group)
     canon: list[PlanOption] = []
     for i, opt in enumerate(parsed):
         oid = str(opt.get("id") or f"{category}-{i + 1}").strip()
@@ -146,7 +146,7 @@ def present_options(runtime: ToolRuntime, category: str, options: list[dict] | s
                 currency=(str(opt.get("currency") or "").strip().upper() or None),
                 per_person=bool(opt.get("per_person", False)),
                 details=str(opt.get("details") or "").strip(),
-                group=(str(opt.get("group") or call_group).strip()),
+                group=_norm_group(opt.get("group") or call_group),
             )
         )
     # Return only this category: the state reducer merges it with the
@@ -212,7 +212,7 @@ def add_plan_item(
             currency=resolved.currency,
             per_person=resolved.per_person,
             details=resolved.details,
-            group=resolved.group,
+            group=_norm_group(resolved.group),
         )
     elif label:
         try:
@@ -227,7 +227,7 @@ def add_plan_item(
             currency=(str(currency or "").strip().upper() or None),
             per_person=bool(per_person),
             details=str(details or "").strip(),
-            group=str(group or "").strip(),
+            group=_norm_group(group),
         )
     else:
         return Command(
@@ -244,7 +244,7 @@ def add_plan_item(
     as_dict = lambda it: it.model_dump() if isinstance(it, PlanItem) else dict(it)
     key = lambda it: (
         as_dict(it).get("category"),
-        str(as_dict(it).get("group") or "").strip(),
+        _norm_group(as_dict(it).get("group")),
         str(as_dict(it).get("option_id")),
     )
     if category in SINGLE_CHOICE_CATEGORIES:
@@ -266,23 +266,30 @@ def add_plan_item(
 
 
 @tool
-def remove_plan_item(runtime: ToolRuntime, category: str, option_id: str) -> Command:
+def remove_plan_item(runtime: ToolRuntime, category: str, option_id: str, group: str = "") -> Command:
     """
     Remove a choice from the trip plan.
 
     WHEN TO CALL: when the user unpicks something ("drop the city tour",
     "forget that hotel"). Match by category + option_id from the plan.
+    Pass group too when the category has legs ("drop the return flight"):
+    without it, every leg sharing that option_id is removed.
     """
     plan = list(runtime.state.get("trip_plan") or [])
+    want_group = _norm_group(group)
 
-    def key(it):
+    def matches(it) -> bool:
         d = it.model_dump() if isinstance(it, PlanItem) else dict(it)
-        return d.get("category"), str(d.get("option_id"))
+        if (d.get("category"), str(d.get("option_id"))) != (category, str(option_id)):
+            return False
+        # Without group: legacy behavior (any leg with that id goes).
+        return not want_group or _norm_group(d.get("group")) == want_group
 
-    kept = [it for it in plan if key(it) != (category, str(option_id))]
+    before = len(plan)
+    kept = [it for it in plan if not matches(it)]
     msg = (
         "Removed from trip plan."
-        if len(kept) < len(plan)
+        if len(kept) < before
         else f"Nothing to remove: '{option_id}' is not in the {category} plan."
     )
     return Command(

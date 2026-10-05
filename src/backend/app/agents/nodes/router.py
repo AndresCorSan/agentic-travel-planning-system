@@ -1,4 +1,5 @@
 from typing import Literal
+import logging
 from langchain_core.messages import SystemMessage
 from pydantic import BaseModel
 from app.agents.ai_models import JEV_CONFIDENCE_THRESHOLD, decide_route_via_jev, light_llm
@@ -6,6 +7,8 @@ from app.agents.state import TravelState
 from app.agents.tools.plan import is_ui_choices_confirmation
 from app.agents.usage import collect_usage
 from app.agents.utils import sanitize_messages_for_llm
+
+logger = logging.getLogger("uvicorn.error")
 
 RESEARCH_ROUTER_PROMPT = """
 You are a travel-planning router.
@@ -113,7 +116,8 @@ async def research_router(state: TravelState):
         *sanitized,
     ])
     if result.get("parsing_error") is not None:
-        raise result["parsing_error"]
+        logger.warning("Router decision unparseable; falling back to main_llm")
+        return {"turn_usage": collect_usage([result["raw"]], "router")}
 
     return {
         "next_step": result["parsed"].route,
