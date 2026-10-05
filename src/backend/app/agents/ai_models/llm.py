@@ -9,6 +9,22 @@ logger = logging.getLogger("uvicorn.error")
 # Seconds to wait before retrying a rate-limited model once.
 RETRY_DELAY_S = 2.0
 
+def require_openrouter_key() -> str:
+    """Read OPENROUTER_API_KEY or fail with an actionable message.
+
+    Replaces bare os.environ[...] (cryptic KeyError at import) and the
+    inconsistent os.getenv(...) (None key failing much later): every
+    instance fails fast, at startup, with the same clear message.
+    """
+    key = os.getenv("OPENROUTER_API_KEY")
+    if not key:
+        raise RuntimeError(
+            "OPENROUTER_API_KEY is not set. Add it to the root .env "
+            "(see .env.example) and restart the backend."
+        )
+    return key
+
+
 # Fallback chain for the lightweight LLM (comma-separated, in order).
 # Default: same family upscaled, then MiMo minimal (different provider/model).
 LIGHT_LLM_FALLBACKS = [
@@ -133,14 +149,14 @@ GLM_PROVIDER = {
 # Normal LLM (retry once on 429s, no fallback model by decision)
 llm = ResilientChatOpenRouter(
     model="z-ai/glm-5.3-flash",
-    api_key=os.environ["OPENROUTER_API_KEY"],
+    api_key=require_openrouter_key(),
     openrouter_provider=GLM_PROVIDER,
 )
 
 # Low-effort LLM for faster and cheaper responses
 low_reasoning_llm = ResilientChatOpenRouter(
     model="z-ai/glm-5.3-flash",
-    api_key=os.environ["OPENROUTER_API_KEY"],
+    api_key=require_openrouter_key(),
     openrouter_provider=GLM_PROVIDER,
     reasoning={
         "effort": "minimal",
@@ -150,6 +166,6 @@ low_reasoning_llm = ResilientChatOpenRouter(
 # Lightweight LLM for simple tasks (gemma -> gemma-27b -> mimo minimal)
 light_llm = ResilientChatOpenRouter(
     model="google/gemma-3-12b-it",
-    api_key=os.getenv("OPENROUTER_API_KEY"),
+    api_key=require_openrouter_key(),
     fallback_models=LIGHT_LLM_FALLBACKS,
 )

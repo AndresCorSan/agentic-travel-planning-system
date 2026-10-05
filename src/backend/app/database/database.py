@@ -17,6 +17,21 @@ _DEFAULT_DB = _BACKEND_DIR / "data" / "app.db"
 
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite+aiosqlite:///{_DEFAULT_DB}")
 
+_SQLITE_PREFIXES = ("sqlite+aiosqlite:///", "sqlite:///")
+
+
+def resolve_sqlite_path(raw: str) -> Path:
+    """Resolve a SQLite location to a filesystem path.
+
+    Single parser for DATABASE_URL and CHECKPOINT_DB_URL (see
+    checkpointer.py): accepts a full SQLAlchemy URL or a plain path,
+    so both settings share the same formats.
+    """
+    for prefix in _SQLITE_PREFIXES:
+        if raw.startswith(prefix):
+            raw = raw[len(prefix):]
+    return Path(raw.split("?")[0]).expanduser()
+
 engine = create_async_engine(DATABASE_URL, future=True)
 AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
@@ -25,8 +40,7 @@ async def init_db() -> None:
     """Create data dir + tables (no Alembic yet: greenfield schema)."""
     # Ensure the SQLite file's parent exists (no-op for server DB URLs).
     if DATABASE_URL.startswith("sqlite"):
-        path = DATABASE_URL.split("sqlite+aiosqlite:///")[-1].split("?")[0]
-        parent = Path(path).expanduser().parent
+        parent = resolve_sqlite_path(DATABASE_URL).parent
         if str(parent) not in ("", "."):
             parent.mkdir(parents=True, exist_ok=True)
     async with engine.begin() as conn:

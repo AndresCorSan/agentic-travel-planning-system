@@ -31,6 +31,9 @@ defineProps<{
   </div>
 </template>
 
+<!-- NOTE: <style> is intentionally unscoped: these rules style slotted
+     content (.lib-card comes from the parent pages), which scoped
+     styles cannot reach. Classes are `lib-`-prefixed to avoid leaks. -->
 <style>
 .lib {
   max-width: 56rem;

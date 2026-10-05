@@ -90,6 +90,8 @@ Optional variables (also read from the same `.env`):
 |---|---|---|
 | `CORS_ORIGINS` | `http://localhost:5173,http://localhost:8080` | Browsers allowed to call the API |
 | `LIGHT_LLM_FALLBACKS` | — | Fallback models for the light LLM |
+| `DATABASE_URL` | `sqlite+aiosqlite:///<backend>/data/app.db` | App data (conversations, plans). Full SQLAlchemy URL or plain path |
+| `CHECKPOINT_DB_URL` | `<backend>/data/checkpoints.db` | LangGraph checkpoints. Same formats as `DATABASE_URL` |
 | `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_ENDPOINT`, `LANGSMITH_PROJECT` | — | LangSmith tracing |
 
 ### 2. Run with Docker (recommended)

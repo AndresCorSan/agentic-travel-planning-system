@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
+from app.database.database import resolve_sqlite_path
 
 _BACKEND_DIR = Path(__file__).resolve().parents[2]
 _DEFAULT_CHECKPOINTS = _BACKEND_DIR / "data" / "checkpoints.db"
@@ -15,11 +16,8 @@ _DEFAULT_CHECKPOINTS = _BACKEND_DIR / "data" / "checkpoints.db"
 
 def checkpoint_path() -> Path:
     raw = os.getenv("CHECKPOINT_DB_URL", str(_DEFAULT_CHECKPOINTS))
-    # Allow both plain paths and sqlite conn strings.
-    for prefix in ("sqlite+aiosqlite:///", "sqlite:///"):
-        if raw.startswith(prefix):
-            raw = raw[len(prefix):]
-    return Path(raw).expanduser()
+    # Same formats as DATABASE_URL (full URL or plain path).
+    return resolve_sqlite_path(raw)
 
 
 @asynccontextmanager
