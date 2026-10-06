@@ -1,3 +1,8 @@
+"""Orchestrator node: turns requirements into parallel subagent tasks.
+
+Invalid plans degrade to main_llm instead of failing; agent invocations
+are guarded so one missing toolset never kills the turn.
+"""
 from langchain_core.messages import SystemMessage
 from langgraph.types import Send
 import logging

@@ -1,3 +1,4 @@
+"""Small message helpers shared by nodes and subagents (sanitize, date line)."""
 from datetime import date
 
 from langchain_core.messages import SystemMessage, ToolMessage

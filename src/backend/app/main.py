@@ -1,3 +1,9 @@
+"""FastAPI entrypoint: builds one shared graph at startup and serves the API.
+
+MCP tools load best-effort (`load_mcp_tools` skips unreachable servers);
+the graph builds with whatever tools exist. Restart the server to pick
+up any change under `app/`.
+"""
 import os
 from contextlib import asynccontextmanager
 

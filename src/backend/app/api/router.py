@@ -1,3 +1,4 @@
+"""Versioned API router: mounts the v1 domain routers under /api/v1."""
 from fastapi import APIRouter
 
 from app.api.v1.conversations import router as conversations_router

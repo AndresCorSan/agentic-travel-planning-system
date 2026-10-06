@@ -1,3 +1,8 @@
+"""Routing node: Jev decision first, chat-LLM fallback, main_llm default.
+
+Decides between destination research, subagent orchestration, or a
+direct main-LLM reply. Never raises: any failure degrades to main_llm.
+"""
 from typing import Literal
 import logging
 from langchain_core.messages import SystemMessage

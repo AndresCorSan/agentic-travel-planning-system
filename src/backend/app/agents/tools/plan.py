@@ -1,3 +1,8 @@
+"""Trip-plan tools: publish options and apply deterministic plan edits.
+
+Choice saves via POST /choices bypass the LLM entirely and reuse the
+same single-choice/group rules (`is_ui_choices_confirmation`).
+"""
 import json
 from langchain.tools import tool, ToolRuntime
 from langchain_core.messages import HumanMessage, ToolMessage

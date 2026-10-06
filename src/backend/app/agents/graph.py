@@ -1,3 +1,11 @@
+"""
+LangGraph graph assembly: 
+extract -> router -> research/orchestration -> main LLM.
+
+The checkpointer key is the conversation id (`configurable.thread_id`);
+destination choice pauses via `interrupt()` and resumes on the next turn.
+Node logic lives in `nodes/`; this module only wires the flow.
+"""
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode, tools_condition

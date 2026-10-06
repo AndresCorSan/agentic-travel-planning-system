@@ -1,4 +1,4 @@
-"""Async SQLite engine + session factory (phase 9 persistence).
+"""Async SQLite engine + session factory.
 
 Single DATABASE_URL env so a future Postgres move is a config change, not
 a code change. Defaults to a file DB under src/backend/data/ (gitignored).

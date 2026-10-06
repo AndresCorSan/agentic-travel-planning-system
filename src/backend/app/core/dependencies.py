@@ -1,3 +1,4 @@
+"""Shared FastAPI dependencies (access to the startup-built graph)."""
 from fastapi import Request
 
 

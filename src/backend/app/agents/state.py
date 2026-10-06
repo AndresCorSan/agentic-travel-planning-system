@@ -1,3 +1,9 @@
+"""Shared graph state: requirements, options, plan and usage channels.
+
+Single source of truth for what the nodes read and the API presents
+(see `api/v1/presenters.py`). Pure data + normalization helpers;
+no LLM calls, no I/O.
+"""
 from operator import add
 from typing import Annotated, Literal
 from typing_extensions import TypedDict

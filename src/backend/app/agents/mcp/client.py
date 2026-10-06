@@ -1,3 +1,9 @@
+"""MCP server registry + best-effort tool loading (unreachable = skipped).
+
+Servers: TicketLens (POIs/tours), weather-mcp (forecast/history), trvl CLI
+(flights/hotels), octotrip (rental cars). TicketLens + weather expose only
+a curated tool subset (`*_TOOL_NAMES`).
+"""
 import functools
 import logging
 

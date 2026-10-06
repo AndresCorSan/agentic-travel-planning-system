@@ -1,3 +1,9 @@
+"""Main LLM node: writes the reply and owns the plan/options tools.
+
+Only this node's tokens stream to the UI. Tool updates (`present_options`,
+`add/remove_plan_item`, `update_requirements`) are translated to SSE
+events by `api/v1/streaming.py`.
+"""
 from langchain_core.messages import SystemMessage
 import logging
 from app.agents.ai_models import llm

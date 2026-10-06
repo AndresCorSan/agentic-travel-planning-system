@@ -1,3 +1,4 @@
+"""Requirements tool: applies mid-reply requirement updates from the main LLM."""
 import json
 from langchain.tools import tool, ToolRuntime
 from langchain_core.messages import ToolMessage

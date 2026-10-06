@@ -1,3 +1,8 @@
+"""Chat LLMs behind a resilient OpenRouter wrapper (retry + model rotation).
+
+Main + subagent models are fixed (no fallback); only `light_llm` rotates.
+A missing key fails fast at startup via `require_openrouter_key`.
+"""
 import asyncio
 import logging
 import os

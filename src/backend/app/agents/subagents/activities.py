@@ -1,3 +1,4 @@
+"""Activities research subagent: POIs + tours via MCP tools (`_base` graph)."""
 from langchain_core.messages import SystemMessage
 from langgraph.prebuilt import ToolNode
 from app.agents.ai_models import low_reasoning_llm

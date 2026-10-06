@@ -1,3 +1,8 @@
+"""Destination research node: proposes candidates, then pauses for the pick.
+
+The frontend sends the choice back as "Let's go with <name>" (`CHOOSE_PREFIX`);
+anything else re-enters the graph flow: extract -> research.
+"""
 from langchain_core.messages import HumanMessage, SystemMessage
 import logging
 from langgraph.types import interrupt

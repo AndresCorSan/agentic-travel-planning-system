@@ -1,3 +1,9 @@
+"""Requirements extraction node: parses the turn into `TravelRequirements`.
+
+UI choice confirmations skip the LLM call for this requirements extraction
+(the plan was already updated deterministically). 
+Unparseable output keeps the previous requirements.
+"""
 from langchain_core.messages import SystemMessage
 import logging
 from app.agents.ai_models import low_reasoning_llm

@@ -1,4 +1,4 @@
-"""App-data models (phase 9). LangGraph execution state lives in the
+"""App-data models. LangGraph execution state lives in the
 separate checkpoint DB (checkpointer.py) — these tables are the queryable
 log: conversations + message history for the UI."""
 from __future__ import annotations
