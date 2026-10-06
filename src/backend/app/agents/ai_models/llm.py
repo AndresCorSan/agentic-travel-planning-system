@@ -39,7 +39,7 @@ LIGHT_LLM_FALLBACKS = [
 
 def _status_code(exc: Exception) -> int | None:
     # 429s arrive in several shapes (status_code attr, status attr, or
-    # plain text) — same broad check as conversations.py uses for its
+    # plain text) — same broad check as streaming.py uses for its
     # error frame. Missing one means the retry+fallback never engages.
     for attr in ("status_code", "status"):
         code = getattr(exc, attr, None)

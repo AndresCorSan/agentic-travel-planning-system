@@ -91,7 +91,7 @@ def route_after_decision(state: TravelState):
 
 # ------------------------------------------------------------------------------
 # Presents the candidates to the user (via an SSE `destinations` message, see
-# api/v1/conversations.py) and pauses for the user's decision.
+# api/v1/streaming.py) and pauses for the user's decision.
 # On resume returns both the context SystemMessage (recommendations were
 # already presented) and the user's reply as HumanMessage, in that order.
 def wait_for_decision(state: TravelState):

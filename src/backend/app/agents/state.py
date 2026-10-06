@@ -179,6 +179,6 @@ class TravelState(TypedDict):
     # One usage entry per LLM call in the turn (see `usage.py`). Needed
     # because structured outputs and subagents leave no AIMessage in
     # `messages`. Entry: {node, model, input_tokens, output_tokens,
-    # total_tokens, cost_usd}. Grows across turns; `conversations._stream`
+    # total_tokens, cost_usd}. Grows across turns; `streaming.stream_turn`
     # slices from a snapshot length and aggregates with `sum_entries`.
     turn_usage: Annotated[list, add]

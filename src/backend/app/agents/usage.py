@@ -5,7 +5,7 @@ How it works, end to end:
    `turn_usage` state channel (`state.py`) via `collect_usage` /
    `message_usage`. This also covers calls that leave no AIMessage
    behind (structured outputs, subagents).
-2. Slice: the channel accumulates across turns, so `conversations._stream`
+2. Slice: the channel accumulates across turns, so `streaming.stream_turn`
    snapshots its length at turn start and only aggregates the new entries.
 3. Sum: `sum_entries` adds that slice field by field (e.g. the entries'
    input_tokens add up to the displayed total) into the `stats` dict.
@@ -33,7 +33,7 @@ def _usage_of(msg) -> tuple[int, int]:
 def sum_turn_usage(messages: list) -> dict:
     """Sum usage over the turn's new messages.
 
-    Fallback used by `conversations._stream` when no node reported to the
+    Fallback used by `streaming.stream_turn` when no node reported to the
     `turn_usage` channel. Prefer `sum_entries` (also covers structured
     outputs and subagents, which leave no AIMessage behind).
     """
@@ -88,7 +88,7 @@ def collect_usage(messages: list, node: str) -> list[dict]:
 def sum_entries(entries: list) -> dict:
     """Aggregate usage entries into one turn total.
 
-    Called by `conversations._stream` on the turn's slice of the
+    Called by `streaming.stream_turn` on the turn's slice of the
     `turn_usage` channel. Returns {input_tokens, output_tokens,
     total_tokens (= in + out), cost_usd (None when no entry carried one),
     model (last non-empty seen)}."""
