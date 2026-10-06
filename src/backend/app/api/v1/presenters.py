@@ -24,6 +24,13 @@ def format_budget(budget, currency) -> str | None:
 
     Unknown currency codes fall back to "CODE 1,000" (never glued).
     Returns None when there is no budget so the panel shows Not specified.
+
+    Args:
+        budget: numeric budget amount, if any.
+        currency: ISO currency code (e.g. "EUR"), if any.
+
+    Returns:
+        The formatted label, or None when there is no budget.
     """
     if not budget:
         return None
@@ -35,7 +42,6 @@ def format_budget(budget, currency) -> str | None:
 
 
 def option_to_dict(opt) -> dict:
-    """PlanOption (pydantic or dict) -> frontend payload."""
     return {
         "id": str(get_field(opt, "id", "")),
         "label": get_field(opt, "label", "") or "",
@@ -48,7 +54,15 @@ def option_to_dict(opt) -> dict:
 
 
 def plan_payload(values: dict) -> dict:
-    """Trip plan + deterministic total for the Plan panel / Budget."""
+    """Trip plan + deterministic total for the Plan panel / Budget.
+
+    Args:
+        values: graph state snapshot with `trip_plan` and `requirements`.
+
+    Returns:
+        Dict with the plan items plus the deterministic total, currency,
+        budget and overBudget flag.
+    """
     raw_plan = (values or {}).get("trip_plan") or []
     req = (values or {}).get("requirements")
     travelers = get_field(req, "travelers")
@@ -76,7 +90,6 @@ def plan_payload(values: dict) -> dict:
 
 
 def candidate_to_card(candidate, index: int) -> dict:
-    """DestinationCandidate (pydantic or dict) -> frontend Destination card."""
     score = get_field(candidate, "score", 0) or 0
     code = (get_field(candidate, "country_code", "") or "").strip().lower()
     if len(code) != 2 or not code.isalpha():
@@ -94,7 +107,14 @@ def candidate_to_card(candidate, index: int) -> dict:
 
 
 def requirements_to_items(req) -> list[dict]:
-    """TravelRequirements -> RequirementItem[] for the Travel State panel."""
+    """TravelRequirements -> RequirementItem[] for the Travel State panel.
+
+    Args:
+        req: a `TravelRequirements` model or plain dict (None allowed).
+
+    Returns:
+        The fixed 10-row RequirementItem list; empty when req is None.
+    """
     if req is None:
         return []
     get = partial(get_field, req)
@@ -164,6 +184,13 @@ def subagent_result_text(output: dict) -> str | None:
     Result keys are irregular (weather_results, activity_results,
     rental_car_results, ...), so scan for the `*_results` suffix instead
     of hardcoding them. Also tolerates Anthropic-style content blocks.
+
+    Args:
+        output: raw node update dict from a subagent node.
+
+    Returns:
+        The latest result text (truncated past the char cap), or None
+        when the update carries no usable text.
     """
     for key, value in output.items():
         if key.endswith("_results") and isinstance(value, list) and value:
@@ -182,6 +209,15 @@ def subagent_result_text(output: dict) -> str | None:
 
 
 def conv_to_dict(conv) -> dict:
+    """Conversation row -> sidebar list payload.
+
+    Args:
+        conv: a `Conversation` ORM row.
+
+    Returns:
+        The conversation as a frontend-ready dict (naive datetimes are
+        assumed UTC).
+    """
     updated = conv.updated_at
     if updated is not None and updated.tzinfo is None:
         updated = updated.replace(tzinfo=timezone.utc)
@@ -194,6 +230,17 @@ def conv_to_dict(conv) -> dict:
 
 
 def stored_to_chat(msg) -> dict:
+    """Persisted message row -> chat message payload (for rehydrate).
+
+    Re-attaches the persisted side-channel payloads (destinations,
+    subagent results, stats) so a reload restores the full bubbles.
+
+    Args:
+        msg: a `Message` ORM row.
+
+    Returns:
+        The message as a frontend-ready chat dict.
+    """
     created = msg.created_at
     if created is not None and created.tzinfo is None:
         created = created.replace(tzinfo=timezone.utc)
@@ -218,6 +265,15 @@ def stored_to_chat(msg) -> dict:
 
 
 def saved_plan_to_dict(row) -> dict:
+    """SavedPlan row -> plans-library card payload.
+
+    Args:
+        row: a `SavedPlan` ORM row.
+
+    Returns:
+        The saved plan as a frontend-ready dict, with the destination and
+        dates requirement values promoted to card subtitle fields.
+    """
     created = row.created_at
     if created is not None and created.tzinfo is None:
         created = created.replace(tzinfo=timezone.utc)

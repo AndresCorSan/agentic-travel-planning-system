@@ -20,6 +20,12 @@ def require_openrouter_key() -> str:
     Replaces bare os.environ[...] (cryptic KeyError at import) and the
     inconsistent os.getenv(...) (None key failing much later): every
     instance fails fast, at startup, with the same clear message.
+
+    Returns:
+        The configured OpenRouter API key.
+
+    Raises:
+        RuntimeError: If OPENROUTER_API_KEY is not set.
     """
     key = os.getenv("OPENROUTER_API_KEY")
     if not key:
@@ -43,6 +49,11 @@ LIGHT_LLM_FALLBACKS = [
 
 
 def _status_code(exc: Exception) -> int | None:
+    """Extract an HTTP status code from an exception, if present.
+
+    429s arrive in several shapes (status_code attr, status attr, or plain
+    text), so each shape is checked in turn.
+    """
     # 429s arrive in several shapes (status_code attr, status attr, or
     # plain text) — same broad check as streaming.py uses for its
     # error frame. Missing one means the retry+fallback never engages.
@@ -98,6 +109,12 @@ class ResilientChatOpenRouter(ChatOpenRouter):
         )
 
     async def _generate_resilient(self, *args, **kwargs):
+        """Generate a response, retrying once on 429 then rotating models.
+
+        Each model is tried, then retried once after RETRY_DELAY_S, before
+        moving to the next fallback. The primary model id is restored
+        afterwards. Non-429 errors propagate immediately.
+        """
         primary = self._primary_model
         last_exc: Exception | None = None
         try:
@@ -119,6 +136,13 @@ class ResilientChatOpenRouter(ChatOpenRouter):
             self._use_model(primary)
 
     async def _stream_resilient(self, *args, **kwargs):
+        """Stream a response, retrying once on 429 then rotating models.
+
+        Each model is tried, then retried once after RETRY_DELAY_S, before
+        moving to the next fallback. Already-yielded chunks are never
+        re-streamed from a fallback, and the primary model id is restored
+        afterwards. Non-429 errors propagate immediately.
+        """
         primary = self._primary_model
         last_exc: Exception | None = None
         yielded = False

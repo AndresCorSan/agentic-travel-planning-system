@@ -15,6 +15,14 @@ _DEFAULT_CHECKPOINTS = _BACKEND_DIR / "data" / "checkpoints.db"
 
 
 def checkpoint_path() -> Path:
+    """Resolve the LangGraph checkpoint database path.
+
+    Reads CHECKPOINT_DB_URL and falls back to data/checkpoints.db, accepting
+    the same formats as DATABASE_URL (full URL or plain path).
+
+    Returns:
+        The resolved checkpoint database path.
+    """
     raw = os.getenv("CHECKPOINT_DB_URL", str(_DEFAULT_CHECKPOINTS))
     # Same formats as DATABASE_URL (full URL or plain path).
     return resolve_sqlite_path(raw)

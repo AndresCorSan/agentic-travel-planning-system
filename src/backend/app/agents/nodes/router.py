@@ -88,6 +88,18 @@ structured_router_llm = light_llm.with_structured_output(
 )
 
 async def research_router(state: TravelState, config: dict | None = None):
+    """Decide which route should handle the latest message.
+
+    Tries the Jev decision model first with a chat-LLM fallback, degrading
+    to main_llm when the decision is unparseable.
+
+    Args:
+        state: Current graph state holding messages and requirements.
+        config: Optional LangGraph invoke config carrying the thread id.
+
+    Returns:
+        Partial state update with the next step and turn usage.
+    """
     tid = (config or {}).get("configurable", {}).get("thread_id", "?")
     messages = state.get("messages") or []
     # Saved-choices confirmations only need the main LLM to acknowledge:
@@ -135,5 +147,12 @@ async def research_router(state: TravelState, config: dict | None = None):
 
 
 def route_next(state: TravelState):
-    """Router for the router node: research, orchestration, or direct reply."""
+    """Router for the router node: research, orchestration, or direct reply.
+
+    Args:
+        state: Current graph state holding the next step routing decision.
+
+    Returns:
+        Next node name, defaulting to main_llm when unset.
+    """
     return state.get("next_step") or "main_llm"

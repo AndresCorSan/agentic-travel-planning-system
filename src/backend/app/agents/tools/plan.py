@@ -29,6 +29,12 @@ def is_ui_choices_confirmation(messages) -> bool:
     LLM call would be wasted) and nothing to route (the destination is
     settled, so the Jev + router LLM calls would only conclude main_llm).
     main_llm then replies using the saved plan.
+
+    Args:
+        messages: the conversation message list (only the last matters).
+
+    Returns:
+        True when the latest message is a UI-choices confirmation.
     """
     return bool(
         messages
@@ -61,6 +67,14 @@ def plan_total(items: list, travelers: int | None = None) -> tuple[float, str | 
     Items without a price are skipped. Currency is the most common one
     among priced items (no FX conversion — mixed currencies are reported
     per item in the payload).
+
+    Args:
+        items: plan items (models or dicts) with price/currency.
+        travelers: traveler count used to scale per-person prices.
+
+    Returns:
+        A (total, currency) tuple; currency is None when no priced item
+        carries one.
     """
     total = 0.0
     currencies: dict[str, int] = {}

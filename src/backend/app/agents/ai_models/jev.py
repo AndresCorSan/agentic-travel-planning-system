@@ -22,10 +22,19 @@ async def decide_route_via_jev(
     criteria: dict,
     question_key: str = "route",
 ) -> tuple[str, float] | None:
-    """Ask Jev for a routing decision. Returns (choice, confidence) or None.
+    """Ask Jev for a routing decision.
 
     Returns None when misconfigured, so the caller falls back to the chat
     LLM, or on any transport/schema error.
+
+    Args:
+        state: Conversation or graph state Jev decides about.
+        instructions: Decision question instructions sent to Jev.
+        criteria: Allowed choices keyed by choice name.
+        question_key: Key identifying the decision question in the payload.
+
+    Returns:
+        The chosen route with its confidence, or None when falling back.
     """
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:

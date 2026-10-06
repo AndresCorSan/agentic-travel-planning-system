@@ -8,10 +8,16 @@ def sanitize_messages_for_llm(messages):
     Auxiliary function for removing file/resource blocks from ToolMessages before 
     sending them to OpenAI Chat Completions.
 
-    This fixes the error "OpenAI Chat Completions does not support file URLs." that 
-    occured passing the trvl tool's response to the LLM.
+    This fixes the "OpenAI Chat Completions does not support file URLs"
+    error from passing the trvl tool's response to the LLM. Only text
+    blocks are kept; the original messages remain unchanged in LangGraph
+    state.
 
-    The original messages remain unchanged in LangGraph state.
+    Args:
+        messages: the message list about to be sent to the LLM.
+
+    Returns:
+        A new list with multi-modal ToolMessages reduced to plain text.
     """
 
     sanitized = []
@@ -49,11 +55,6 @@ def sanitize_messages_for_llm(messages):
 
 
 def current_date_message() -> SystemMessage:
-    """SystemMessage stating today's date, built fresh on every invocation.
-
-    Static context belongs in the prompt, not behind a tool call: this costs
-    no round-trip and is always present for date-sensitive research.
-    """
     today = date.today()
     return SystemMessage(
         content=f"Today is {today.strftime('%A, %B %d, %Y')} ({today.isoformat()})."

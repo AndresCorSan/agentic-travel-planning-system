@@ -45,6 +45,15 @@ RESEARCH_KEY_BY_AGENT = {
 
 
 def frame(event: str, payload: dict) -> str:
+    """One SSE frame for the wire protocol.
+
+    Args:
+        event: SSE event name (matches the frontend `TravelStreamEvent` map).
+        payload: JSON-serializable event data.
+
+    Returns:
+        The raw `event: ...\\ndata: ...\\n\\n` frame string.
+    """
     return f"event: {event}\ndata: {json.dumps(payload)}\n\n"
 
 
@@ -54,6 +63,12 @@ def trace_config(conversation_id: str) -> dict:
     `configurable.thread_id` is the checkpointer key (functional, not a
     filter). `metadata.conversation_id` is what makes runs filterable in
     the LangSmith UI; `tags` allow cross-cutting slices.
+
+    Args:
+        conversation_id: the conversation id, used as LangGraph thread id.
+
+    Returns:
+        The LangGraph invoke config for the turn.
     """
     return {
         "configurable": {"thread_id": conversation_id},
@@ -71,6 +86,21 @@ def _task_agent(task) -> str | None:
 
 
 async def stream_turn(graph, conversation_id: str, message: str):
+    """Run one graph turn and stream it as SSE frames.
+
+    Translates per-node updates into frontend events, persists the user
+    turn up-front and the assistant turn at the end (write-through), and
+    folds auto-titling + turn usage stats into the stream. A 429 anywhere
+    in the turn surfaces as a friendly `error` event instead of a crash.
+
+    Args:
+        graph: the compiled LangGraph app (shared at startup).
+        conversation_id: the conversation id (LangGraph thread id).
+        message: the user's message text (or resume value after interrupt).
+
+    Yields:
+        Raw SSE frame strings, ending with a `done` frame.
+    """
     config = trace_config(conversation_id)
     # Persist the user turn up-front so history survives mid-stream crashes.
     try:

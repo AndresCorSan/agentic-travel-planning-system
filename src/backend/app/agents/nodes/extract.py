@@ -51,6 +51,19 @@ requirements_llm = low_reasoning_llm.with_structured_output(
 
 
 async def extract_requirements(state: TravelState, config: dict | None = None):
+    """Extract structured travel requirements from the latest turn.
+
+    Skips the LLM call for UI choice confirmations and keeps the previous
+    requirements when the model output is unparseable.
+
+    Args:
+        state: Current graph state holding messages and requirements.
+        config: Optional LangGraph invoke config carrying the thread id.
+
+    Returns:
+        Partial state update with requirements and turn usage, usage only
+        when output is unparseable, or empty update when skipped.
+    """
     messages = state.get("messages") or []
     # Saved-choices confirmations carry no new requirements and already
     # updated the plan deterministically: skip the LLM call entirely.

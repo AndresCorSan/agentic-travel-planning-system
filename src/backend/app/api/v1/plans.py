@@ -27,6 +27,7 @@ Reply in the same language as the requirements and plan labels.""".strip()
 
 
 def _fallback_description(requirements: list[dict], payload: dict) -> str:
+    """Template description when the LLM paragraph is unavailable."""
     by_key = {r.get("key"): r.get("value") for r in requirements if isinstance(r, dict)}
     dest = by_key.get("destination") or "your destination"
     dates = by_key.get("dates")
@@ -41,7 +42,11 @@ def _fallback_description(requirements: list[dict], payload: dict) -> str:
 
 
 async def _describe_plan(requirements: list[dict], payload: dict, conversation_id: str) -> str:
-    """Standalone light_llm call (not the graph): the input is just the snapshot."""
+    """Standalone light_llm call (not the graph): the input is just the snapshot.
+
+    Any LLM failure falls back to the template description, so saving a
+    plan never fails on the paragraph.
+    """
     confirmed = [f"{r.get('label')}: {r.get('value')}" for r in requirements if isinstance(r, dict) and r.get("value")]
     picks = [f"{i.get('category')}: {i.get('label')}" for i in (payload.get("plan") or []) if isinstance(i, dict)]
     summary = "Requirements:\n" + ("\n".join(f"- {c}" for c in confirmed) or "- (none)") + "\n"
@@ -59,7 +64,20 @@ async def _describe_plan(requirements: list[dict], payload: dict, conversation_i
 
 @router.post("/conversations/{conversation_id}/plans")
 async def save_plan(conversation_id: str, body: SavePlanRequest, graph=Depends(get_graph)):
-    """Snapshot destination + requirements + trip plan + budget as a new saved plan."""
+    """Snapshot destination + requirements + trip plan + budget as a new saved plan.
+
+    Args:
+        conversation_id: the conversation id (LangGraph thread id).
+        body: optional plan title (defaults to "<destination> trip").
+        graph: the shared compiled graph (injected).
+
+    Returns:
+        The new saved-plan card payload.
+
+    Raises:
+        HTTPException: 503 when the graph is not initialized, 422 when no
+            destination is set or the plan is still empty.
+    """
     if graph is None:
         raise HTTPException(status_code=503, detail="Graph not initialized")
     state = await graph.aget_state({"configurable": {"thread_id": conversation_id}})
@@ -82,6 +100,11 @@ async def save_plan(conversation_id: str, body: SavePlanRequest, graph=Depends(g
 
 @router.get("/plans")
 async def list_plans():
+    """List all saved plans for the library, newest first.
+
+    Returns:
+        Dict with the saved-plan card payloads.
+    """
     async with AsyncSessionLocal() as session:
         rows = await repo.list_saved_plans(session)
         return {"plans": [saved_plan_to_dict(r) for r in rows]}
@@ -89,6 +112,17 @@ async def list_plans():
 
 @router.get("/plans/{plan_id}")
 async def get_plan(plan_id: int):
+    """Return one saved plan (for the Plan detail view).
+
+    Args:
+        plan_id: the saved-plan id.
+
+    Returns:
+        The saved-plan card payload.
+
+    Raises:
+        HTTPException: 404 when the plan does not exist.
+    """
     async with AsyncSessionLocal() as session:
         row = await repo.get_saved_plan(session, plan_id)
         if row is None:
@@ -98,6 +132,18 @@ async def get_plan(plan_id: int):
 
 @router.patch("/plans/{plan_id}")
 async def rename_plan(plan_id: int, body: RenamePlanRequest):
+    """Rename a saved plan.
+
+    Args:
+        plan_id: the saved-plan id.
+        body: the new title (blank falls back to "Saved trip").
+
+    Returns:
+        The renamed saved-plan card payload.
+
+    Raises:
+        HTTPException: 404 when the plan does not exist.
+    """
     async with AsyncSessionLocal() as session:
         row = await repo.rename_saved_plan(session, plan_id, body.title.strip() or "Saved trip")
         if row is None:
@@ -108,6 +154,17 @@ async def rename_plan(plan_id: int, body: RenamePlanRequest):
 
 @router.delete("/plans/{plan_id}")
 async def delete_plan(plan_id: int):
+    """Delete a saved plan.
+
+    Args:
+        plan_id: the saved-plan id.
+
+    Returns:
+        Dict with the deleted plan id.
+
+    Raises:
+        HTTPException: 404 when the plan does not exist.
+    """
     async with AsyncSessionLocal() as session:
         ok = await repo.delete_saved_plan(session, plan_id)
         await session.commit()

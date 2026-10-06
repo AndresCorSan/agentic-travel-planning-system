@@ -25,7 +25,18 @@ TITLE_SYSTEM_PROMPT = (
 
 
 def has_title_context(message: str, requirements, candidates) -> bool:
-    """True once there is enough substance to generate a title once."""
+    """True once there is enough substance to generate a title once.
+
+    Args:
+        message: the user's latest message text.
+        requirements: extracted `TravelRequirements` (model or dict), if any.
+        candidates: destination candidates proposed so far, if any.
+
+    Returns:
+        True when the turn carries trip substance (destination, dates,
+        interests, ...); False for bare greetings that must not freeze
+        the title.
+    """
     if candidates:
         return True
     if requirements is not None:
@@ -50,6 +61,15 @@ async def generate_title(message: str, requirements, candidates) -> tuple[str | 
 
     Returns (title, usage_entry) so the caller can fold this call into
     the turn's stats. Any failure returns (None, None).
+
+    Args:
+        message: the user's latest message text.
+        requirements: extracted `TravelRequirements` (model or dict), if any.
+        candidates: destination candidates proposed so far, if any.
+
+    Returns:
+        A (title, usage_entry) tuple; (None, None) when the title could
+        not be generated, so the previous title is kept.
     """
     try:
         lines = [f"Last user message: {message.strip()[:500]}"]

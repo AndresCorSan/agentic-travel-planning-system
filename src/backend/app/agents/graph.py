@@ -22,6 +22,18 @@ from app.agents.subagents.transportation import build_transportation_subgraph
 from app.agents.subagents.weather import build_weather_subgraph
 
 def build_graph(mcp_tools, checkpointer=None):
+    """Assemble the travel-planning graph from the available MCP tools.
+
+    Registers only subagents with working tools and compiles the flow
+    with the given checkpointer.
+
+    Args:
+        mcp_tools: Mapping of loaded MCP tools used to register subagents.
+        checkpointer: Optional checkpointer for conversation persistence, defaulting to in-memory storage.
+
+    Returns:
+        Compiled graph ready for invocation with a thread id.
+    """
     builder = StateGraph(TravelState)
 
     # ---- Nodes ----

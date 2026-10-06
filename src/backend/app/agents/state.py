@@ -119,6 +119,14 @@ def get_field(obj, name: str, default=None):
 
     Graph state mixes both shapes after `aupdate_state`, so every mapper
     needs this instead of its own `getattr or .get` lambda.
+
+    Args:
+        obj: a pydantic model or plain dict.
+        name: the field name to read.
+        default: value returned when the field is missing.
+
+    Returns:
+        The field value, or `default` when absent.
     """
     if isinstance(obj, dict):
         return obj.get(name, default)

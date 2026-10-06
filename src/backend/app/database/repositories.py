@@ -8,6 +8,7 @@ from app.database.models import Conversation, Message, SavedPlan
 
 
 async def ensure_conversation(session: AsyncSession, conversation_id: str, title: str = "New trip") -> Conversation:
+    """Fetch a conversation or create it when missing."""
     conv = await session.get(Conversation, conversation_id)
     if conv is None:
         conv = Conversation(id=conversation_id, title=title)

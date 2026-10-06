@@ -36,6 +36,12 @@ def sum_turn_usage(messages: list) -> dict:
     Fallback used by `streaming.stream_turn` when no node reported to the
     `turn_usage` channel. Prefer `sum_entries` (also covers structured
     outputs and subagents, which leave no AIMessage behind).
+
+    Args:
+        messages: the turn's new chat messages.
+
+    Returns:
+        The aggregated usage dict (same shape as `sum_entries`).
     """
     return sum_entries(collect_usage(messages or [], "main_llm"))
 
@@ -47,6 +53,13 @@ def message_usage(msg, node: str) -> dict | None:
     LLM call into the `turn_usage` channel. Entry shape (JSON-safe, so
     the checkpointer can persist it):
     {node, model, input_tokens, output_tokens, total_tokens, cost_usd}.
+
+    Args:
+        msg: the LLM response message to report.
+        node: graph node name the call belongs to.
+
+    Returns:
+        The usage entry dict, or None when the message carries nothing.
     """
     if not isinstance(msg, AIMessage):
         return None
@@ -76,7 +89,15 @@ def message_usage(msg, node: str) -> dict | None:
 
 
 def collect_usage(messages: list, node: str) -> list[dict]:
-    """One usage entry per AIMessage that carries usage data."""
+    """One usage entry per AIMessage that carries usage data.
+
+    Args:
+        messages: chat messages to scan for usage metadata.
+        node: graph node name attributed to every entry.
+
+    Returns:
+        The list of usage entries (messages without data are skipped).
+    """
     entries = []
     for msg in messages or []:
         entry = message_usage(msg, node)
@@ -89,9 +110,16 @@ def sum_entries(entries: list) -> dict:
     """Aggregate usage entries into one turn total.
 
     Called by `streaming.stream_turn` on the turn's slice of the
-    `turn_usage` channel. Returns {input_tokens, output_tokens,
-    total_tokens (= in + out), cost_usd (None when no entry carried one),
-    model (last non-empty seen)}."""
+    `turn_usage` channel.
+
+    Args:
+        entries: usage entry dicts (malformed ones are skipped).
+
+    Returns:
+        Turn total: {input_tokens, output_tokens, total_tokens (= in +
+        out), cost_usd (None when no entry carried one), model (last
+        non-empty seen)}.
+    """
     input_tokens = 0
     output_tokens = 0
     cost = 0.0

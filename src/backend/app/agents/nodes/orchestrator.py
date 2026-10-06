@@ -28,6 +28,11 @@ AVAILABLE_AGENTS: list[str] = list(AGENT_DESCRIPTIONS)
 
 
 def set_available_agents(names: list[str]) -> None:
+    """Restrict orchestration to agents with working tools.
+
+    Args:
+        names: Agent names to enable, filtered against known agent descriptions.
+    """
     global AVAILABLE_AGENTS
     AVAILABLE_AGENTS = [n for n in names if n in AGENT_DESCRIPTIONS]
 
@@ -66,6 +71,17 @@ orchestrator_llm = llm.with_structured_output(
 )
 
 async def orchestrator(state: TravelState, config: dict | None = None):
+    """Build the specialist delegation plan for the latest request.
+
+    Invalid schemas degrade to an empty plan so main_llm takes over.
+
+    Args:
+        state: Current graph state holding requirements and messages.
+        config: Optional LangGraph invoke config carrying the thread id.
+
+    Returns:
+        Partial state update with the orchestration plan and turn usage.
+    """
     requirements = state["requirements"]
     agents = "\n".join(f"- {name}: {AGENT_DESCRIPTIONS[name]}" for name in AVAILABLE_AGENTS)
 
@@ -102,7 +118,17 @@ async def orchestrator(state: TravelState, config: dict | None = None):
 
 
 def route_to_agents(state: TravelState):
-    """Fan-out: Send each AgentTask to its specialist subagent."""
+    """Fan-out: Send each AgentTask to its specialist subagent.
+
+    Drops tasks for unavailable agents and falls back to main_llm when
+    nothing remains to delegate.
+
+    Args:
+        state: Current graph state holding the orchestration plan.
+
+    Returns:
+        Send targets for available agents, or main_llm when no tasks remain.
+    """
     plan = state.get("orchestration_plan") or []
     tasks = [t for t in plan if t.agent in AVAILABLE_AGENTS]
     if len(tasks) < len(plan):

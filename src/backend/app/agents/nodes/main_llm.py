@@ -114,6 +114,18 @@ main_tools = [update_requirements, present_options, add_plan_item, remove_plan_i
 main_llm = llm.bind_tools(main_tools)
 
 async def main_llm_node(state: TravelState, config: dict | None = None) -> dict:
+    """Compose the user-facing reply from requirements, research, and plan.
+
+    Gathers specialist results, published options, and the trip plan into
+    the prompt context before invoking the main LLM with plan tools.
+
+    Args:
+        state: Current graph state holding requirements, research results, options, plan, and messages.
+        config: Optional LangGraph invoke config carrying the thread id.
+
+    Returns:
+        Partial state update with the assistant message and turn usage.
+    """
     # Extract results from each sub-agent and format them for the main LLM.
     subagents_results = []
 

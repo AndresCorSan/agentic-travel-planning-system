@@ -31,6 +31,15 @@ from app.database.database import init_db
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Run startup and shutdown for the application.
+
+    Initializes the app database, loads MCP tools best-effort, and builds
+    one shared graph with the checkpoint saver. Failures are logged and
+    the app continues without persistence or without a graph.
+
+    Args:
+        app: Application instance to attach the shared graph to.
+    """
     import logging
 
     logger = logging.getLogger("uvicorn.error")

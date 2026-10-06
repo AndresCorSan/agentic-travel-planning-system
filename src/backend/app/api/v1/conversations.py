@@ -41,6 +41,18 @@ async def save_choices(conversation_id: str, body: SaveChoicesRequest, graph=Dep
     the saved labels; the frontend then sends the user message through
     the normal pipeline (like "Let's go with…"), where extract+router
     short-circuit on SAVED_CHOICES_PREFIX straight to main_llm.
+
+    Args:
+        conversation_id: the conversation id (LangGraph thread id).
+        body: the selected category/option_id pairs.
+        graph: the shared compiled graph (injected).
+
+    Returns:
+        Dict with the saved labels plus the refreshed plan payload.
+
+    Raises:
+        HTTPException: 503 when the graph is not initialized, 422 for an
+            unknown option id.
     """
     if graph is None:
         raise HTTPException(status_code=503, detail="Graph not initialized")
@@ -94,6 +106,19 @@ async def save_choices(conversation_id: str, body: SaveChoicesRequest, graph=Dep
 
 @router.post("/conversations/{conversation_id}/messages")
 async def send_message(conversation_id: str, body: SendMessageRequest, graph=Depends(get_graph)):
+    """Stream one graph turn as SSE (`stream_turn`).
+
+    Args:
+        conversation_id: the conversation id (LangGraph thread id).
+        body: the user's message text.
+        graph: the shared compiled graph (injected).
+
+    Returns:
+        A `StreamingResponse` with `text/event-stream` frames.
+
+    Raises:
+        HTTPException: 503 when the graph is not initialized.
+    """
     if graph is None:
         raise HTTPException(status_code=503, detail="Graph not initialized")
     return StreamingResponse(
@@ -105,6 +130,11 @@ async def send_message(conversation_id: str, body: SendMessageRequest, graph=Dep
 
 @router.get("/conversations")
 async def list_conversations():
+    """List all conversations for the sidebar, newest first.
+
+    Returns:
+        Dict with the conversation list payloads.
+    """
     async with AsyncSessionLocal() as session:
         convs = await repo.list_conversations(session)
         return {"conversations": [conv_to_dict(c) for c in convs]}
@@ -112,6 +142,14 @@ async def list_conversations():
 
 @router.post("/conversations")
 async def create_conversation(body: CreateConversationRequest):
+    """Create (or ensure) a conversation with an optional client-side id.
+
+    Args:
+        body: optional client id plus title (defaults applied).
+
+    Returns:
+        The new (or existing) conversation payload.
+    """
     conversation_id = body.id.strip() if body.id and body.id.strip() else f"trip-{uuid.uuid4().hex[:8]}"
     async with AsyncSessionLocal() as session:
         conv = await repo.ensure_conversation(session, conversation_id, body.title or DEFAULT_CONVERSATION_TITLE)
@@ -121,6 +159,14 @@ async def create_conversation(body: CreateConversationRequest):
 
 @router.get("/conversations/{conversation_id}/messages")
 async def get_conversation_messages(conversation_id: str):
+    """Return the persisted message history (for reload rehydrate).
+
+    Args:
+        conversation_id: the conversation id.
+
+    Returns:
+        Dict with the chat message payloads in order.
+    """
     async with AsyncSessionLocal() as session:
         msgs = await repo.get_messages(session, conversation_id)
         return {"messages": [stored_to_chat(m) for m in msgs]}
@@ -128,7 +174,19 @@ async def get_conversation_messages(conversation_id: str):
 
 @router.get("/conversations/{conversation_id}/state")
 async def get_conversation_state(conversation_id: str, graph=Depends(get_graph)):
-    """Rehydrate side panels (requirements/options/plan) after a reload."""
+    """Rehydrate side panels (requirements/options/plan) after a reload.
+
+    Args:
+        conversation_id: the conversation id (LangGraph thread id).
+        graph: the shared compiled graph (injected).
+
+    Returns:
+        Dict with requirements, options by category and the plan payload
+        (None when the plan is still empty).
+
+    Raises:
+        HTTPException: 503 when the graph is not initialized.
+    """
     if graph is None:
         raise HTTPException(status_code=503, detail="Graph not initialized")
     state = await graph.aget_state({"configurable": {"thread_id": conversation_id}})
@@ -145,6 +203,18 @@ async def get_conversation_state(conversation_id: str, graph=Depends(get_graph))
 
 @router.patch("/conversations/{conversation_id}")
 async def rename_conversation(conversation_id: str, body: RenameConversationRequest):
+    """Rename a conversation (manual renames are never auto-overwritten).
+
+    Args:
+        conversation_id: the conversation id.
+        body: the new title (blank falls back to the default title).
+
+    Returns:
+        The renamed conversation payload.
+
+    Raises:
+        HTTPException: 404 when the conversation does not exist.
+    """
     async with AsyncSessionLocal() as session:
         conv = await repo.rename_conversation(session, conversation_id, body.title.strip() or DEFAULT_CONVERSATION_TITLE)
         if conv is None:
@@ -155,6 +225,21 @@ async def rename_conversation(conversation_id: str, body: RenameConversationRequ
 
 @router.delete("/conversations/{conversation_id}")
 async def delete_conversation(conversation_id: str, graph=Depends(get_graph)):
+    """Delete a conversation plus its graph checkpoint thread.
+
+    The checkpoint delete is best-effort: a failure only logs, the
+    conversation is already gone.
+
+    Args:
+        conversation_id: the conversation id.
+        graph: the shared compiled graph (injected, optional for this op).
+
+    Returns:
+        Dict with the deleted conversation id.
+
+    Raises:
+        HTTPException: 404 when the conversation does not exist.
+    """
     async with AsyncSessionLocal() as session:
         ok = await repo.delete_conversation(session, conversation_id)
         await session.commit()

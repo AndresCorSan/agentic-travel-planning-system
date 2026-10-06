@@ -26,6 +26,12 @@ def resolve_sqlite_path(raw: str) -> Path:
     Single parser for DATABASE_URL and CHECKPOINT_DB_URL (see
     checkpointer.py): accepts a full SQLAlchemy URL or a plain path,
     so both settings share the same formats.
+
+    Args:
+        raw: SQLAlchemy URL or plain filesystem path.
+
+    Returns:
+        The resolved filesystem path.
     """
     for prefix in _SQLITE_PREFIXES:
         if raw.startswith(prefix):
