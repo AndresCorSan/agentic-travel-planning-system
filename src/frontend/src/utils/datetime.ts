@@ -1,3 +1,4 @@
+/* Sidebar timestamp formatting ("5 min ago", "Sep 13, 2026"). */
 /** Human-friendly timestamps for the sidebar ("5 min ago", "Sep 13, 2026").
  *  Non-ISO values (like "just now") pass through untouched. */
 export function formatUpdatedAt(value: string | null | undefined): string {

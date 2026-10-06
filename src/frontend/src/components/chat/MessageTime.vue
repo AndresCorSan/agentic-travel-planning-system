@@ -1,6 +1,6 @@
 <!-- Message timestamp: "now" during the first minute, then the local
-     clock time (HH:MM). Non-ISO values render as-is. Re-evaluates every 30s so old messages flip on their
-     own without a page reload.
+     clock time (HH:MM). Non-ISO values render as-is. Re-evaluates
+     every 30s so old messages flip on their own without a page reload.
      Root keeps class "time" so each parent's scoped style still applies. -->
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';

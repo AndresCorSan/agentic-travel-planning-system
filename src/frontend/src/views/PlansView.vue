@@ -4,7 +4,7 @@ import Button from 'primevue/button';
 import { onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { createConversationId } from '../api/travelService';
-import { useLibraryStore } from '../stores/travel';
+import { useLibraryStore } from '../stores/library';
 import LibraryListPage from '../components/library/LibraryListPage.vue';
 
 const library = useLibraryStore();

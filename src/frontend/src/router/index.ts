@@ -1,7 +1,9 @@
-// Routes: / opens a fresh empty trip (welcome hero; nothing is stored until
-// the first message is sent), /trip/:id is the chat screen,
-// /conversations is the conversations overview,
-// /plans and /plans/:id are the saved-plans overview and detail.
+/*
+ * Routes: / opens a fresh empty trip (welcome hero; nothing is stored until
+ * the first message is sent), /trip/:id is the chat screen,
+ * /conversations is the conversations overview,
+ * /plans and /plans/:id are the saved-plans overview and detail.
+ */
 import { createRouter, createWebHistory } from 'vue-router';
 import { createConversationId } from '../api/travelService';
 import ChatView from '../views/ChatView.vue';

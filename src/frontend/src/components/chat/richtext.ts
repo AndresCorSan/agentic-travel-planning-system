@@ -1,5 +1,8 @@
-// Full markdown renderer for LLM replies: marked for parsing,
-// DOMPurify for sanitizing (content comes from the LLM into v-html).
+/*
+ * Markdown renderer for LLM replies (marked) + sanitizer (DOMPurify,
+ * content comes from the LLM into v-html). Also hosts the price/group
+ * label helpers shared by plan UIs.
+ */
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import type { PlanOption } from '../../types';

@@ -1,5 +1,7 @@
-// UI preferences store (Pinia): sidebar/panel collapsed states, dark mode
-// and accent color. Theme choices persist to localStorage.
+/*
+ * UI preferences store (Pinia): sidebar/panel collapsed states, dark mode
+ * and accent color. Theme choices persist to localStorage.
+ */
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { useLocalStorageToggle } from '../composables/useLocalStorageToggle';

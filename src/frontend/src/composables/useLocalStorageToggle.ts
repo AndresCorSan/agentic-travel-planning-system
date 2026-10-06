@@ -1,7 +1,9 @@
+/*
+ * Reactive boolean persisted to localStorage, for collapsible UI that must
+ * survive reloads (sidebar groups, travel-state sections, panel collapsed
+ * state). Returns [state, toggle]; a missing key falls back to defaultValue.
+ */
 import { ref } from 'vue';
-
-// Boolean flag persisted to localStorage, used for every collapsible
-// section (sidebar groups, travel-state sections, panel collapsed state).
 // Missing key falls back to `defaultValue`.
 export function useLocalStorageToggle(key: string, defaultValue = true) {
   const stored = localStorage.getItem(key);

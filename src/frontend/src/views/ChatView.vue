@@ -6,7 +6,8 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import ChatComposer from '../components/chat/ChatComposer.vue';
 import MessageList from '../components/chat/MessageList.vue';
 import WelcomeHero from '../components/chat/WelcomeHero.vue';
-import { useLibraryStore, useTravelStore } from '../stores/travel';
+import { useLibraryStore } from '../stores/library';
+import { useTravelStore } from '../stores/travel';
 import { useUiStore } from '../stores/ui';
 
 const props = defineProps<{ id: string }>();

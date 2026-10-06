@@ -8,7 +8,7 @@ import { computed } from 'vue';
 import { RouterView, useRoute } from 'vue-router';
 import { useUiStore } from '../../stores/ui';
 import Sidebar from '../sidebar/Sidebar.vue';
-import TravelStatePanel from '../state/TravelStatePanel.vue';
+import TravelStatePanel from '../travel-state/TravelStatePanel.vue';
 
 const ui = useUiStore();
 const route = useRoute();

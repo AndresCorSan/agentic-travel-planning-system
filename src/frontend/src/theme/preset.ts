@@ -1,5 +1,7 @@
-// PrimeVue Aura preset customized for the app: warm surface scale plus
-// small component radii. Default brand = the sunset accent (accents.ts).
+/*
+ * PrimeVue Aura preset customized for the app: warm surface scale plus
+ * small component radii. Default brand = the sunset accent (accents.ts).
+ */
 import Aura from '@primeuix/themes/aura';
 import { definePreset } from '@primeuix/themes';
 import { ACCENTS } from './accents';

@@ -5,7 +5,7 @@ import { computed } from 'vue';
 import type { ChatMessage } from '../../types';
 import { SINGLE_CHOICE_CATEGORIES } from '../../types';
 import { useTravelStore } from '../../stores/travel';
-import DestinationRecommendation from '../travel/DestinationRecommendation.vue';
+import DestinationRecommendation from './DestinationRecommendation.vue';
 import SubagentResults from './SubagentResults.vue';
 import MessageMeta from './MessageMeta.vue';
 import { renderOptionGroups, renderRich } from './richtext';

@@ -1,5 +1,11 @@
-// Shared domain types: the contract between service, stores and
-// components.
+/*
+ * Shared domain types: the contract between service, stores and components.
+ * Covers chat messages, the SSE event union (mirrors the backend wire
+ * protocol in streaming.py — keep both sides in sync), plan/budget
+ * payloads, research status, and the library entities (conversations,
+ * saved plans). Also hosts SINGLE_CHOICE_CATEGORIES, the only runtime
+ * constant here: categories where a new choice replaces the previous one.
+ */
 export type MessageKind =
   | 'text'
   | 'destinations'

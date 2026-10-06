@@ -11,8 +11,9 @@ import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { savePlan as savePlanRemote } from '../../api/travelService';
 import { useLocalStorageToggle } from '../../composables/useLocalStorageToggle';
-import { useLibraryStore, useTravelStore } from '../../stores/travel';
-import TripPlanSection from '../travel/TripPlanSection.vue';
+import { useLibraryStore } from '../../stores/library';
+import { useTravelStore } from '../../stores/travel';
+import TripPlanSection from './TripPlanSection.vue';
 
 defineProps<{ drawer?: boolean }>();
 

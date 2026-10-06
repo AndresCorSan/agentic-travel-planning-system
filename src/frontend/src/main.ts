@@ -1,5 +1,7 @@
-// Application bootstrap: Pinia, router, PrimeVue (TravelPreset + services),
-// then restore the persisted theme/accent before mounting.
+/*
+ * Application bootstrap: Pinia, router, PrimeVue (TravelPreset + services),
+ * then restore the persisted theme/accent before mounting.
+ */
 import '@fontsource/inter/400.css';
 import '@fontsource/inter/500.css';
 import '@fontsource/inter/600.css';

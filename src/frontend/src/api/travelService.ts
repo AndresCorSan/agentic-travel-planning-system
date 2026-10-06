@@ -1,3 +1,18 @@
+/*
+ * The only gateway to the backend: live message stream over SSE, conversations
+ * CRUD, deterministic choice saves and saved-plan snapshots. Its purpose is to
+ * keep HTTP details (paths, envelopes, fallbacks) in one place so stores and
+ * views deal only in domain types.
+ *
+ * Resilience policy: reads fail soft (empty list / null) so panels render
+ * without data instead of crashing; renames and deletes are optimistic
+ * fire-and-forget — the local change stays whatever the server answers.
+ * Also hosts the local-only helpers: instant pending-user placeholder,
+ * client-generated conversation ids (the backend row is created lazily on
+ * the first message) and empty panel factories.
+ * (Stores also read the stream.ts constants directly; no other module may
+ * touch api/.)
+ */
 import { api } from './client';
 import { AGENT_LABELS, postStream } from './stream';
 import type { StreamEvent } from '../types';

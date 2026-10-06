@@ -6,7 +6,7 @@ import Button from 'primevue/button';
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { getSavedPlan } from '../api/travelService';
-import TripPlanSection from '../components/travel/TripPlanSection.vue';
+import TripPlanSection from '../components/travel-state/TripPlanSection.vue';
 import type { SavedPlan } from '../types';
 
 const props = defineProps<{ id: string }>();

@@ -1,13 +1,19 @@
-// Domain stores (Pinia): `travel` holds the active conversation thread
-// (messages, requirements, research, budget); `library` holds the sidebar
-// collections (conversations, saved plans) with rename/delete actions.
+/*
+ * Active-thread store (Pinia): messages, requirements, research status,
+ * budget, selectable options and the trip plan for the open conversation.
+ * Turn I/O (send/loadConversation) and choice saves live here; SSE event
+ * translation is delegated to travelEvents, sidebar collections to the
+ * library store.
+ */
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import * as service from '../api/travelService';
-import { AGENT_LABELS, AGENT_RESEARCH_KEY, SAVED_CHOICES_PREFIX } from '../api/stream';
+import { AGENT_RESEARCH_KEY, SAVED_CHOICES_PREFIX } from '../api/stream';
 import { categoryLabel, groupLabel } from '../components/chat/richtext';
-import type { SubagentResult, AgentRow, BudgetSummary, ChatMessage, Conversation, PlanItem, PlanOption, PlanUpdate, ResearchStatus, RequirementItem, SavedPlan, StreamEvent } from '../types';
+import type { AgentRow, BudgetSummary, ChatMessage, PlanItem, PlanOption, PlanUpdate, ResearchStatus, RequirementItem } from '../types';
 import { SINGLE_CHOICE_CATEGORIES } from '../types';
+import { useLibraryStore } from './library';
+import { createEventApplier } from './travelEvents';
 
 export const useTravelStore = defineStore('travel', () => {
   const conversationId = ref<string>('lisbon-trip');
@@ -136,21 +142,13 @@ export const useTravelStore = defineStore('travel', () => {
   function vote(messageId: string, name: string) {
     voted.value[messageId] = name;
   }
-  // Specialist outputs buffered during the current turn (`agent.result`
-  // events); attached to the assistant message when it is finalized.
-  let pendingResults: SubagentResult[] = [];
-  // Options published during the current turn (`options` events). If the
-  // finalized message carries no [[option:id]] flags (the LLM skipped
-  // them), these render as an automatic block under that message instead
-  // of losing the choice controls for the turn.
-  let pendingTurnOptions: { category: string; options: PlanOption[] }[] = [];
   const optionsByMessage = ref<Record<string, { category: string; options: PlanOption[] }[]>>({});
-  function attachPendingOptions(messageId: string) {
-    if (!pendingTurnOptions.length) return;
-    optionsByMessage.value = { ...optionsByMessage.value, [messageId]: pendingTurnOptions };
-    pendingTurnOptions = [];
-  }
-  let streamCounter = 1000;
+  // Backend-event translator for the current turn (owns its own buffers).
+  const turnEvents = createEventApplier({
+    streamStatus, agentRows, streaming, research, requirements,
+    optionsByCategory, optionsByMessage, cache, messageIds,
+    applyPlan, mergeOptions,
+  });
 
   async function loadConversation(id: string) {
     conversationId.value = id;
@@ -215,10 +213,9 @@ export const useTravelStore = defineStore('travel', () => {
       streamStatus.value = 'Reasoning…';
       agentRows.value = [];
       streaming.value = null;
-      pendingResults = [];
-      pendingTurnOptions = [];
+      turnEvents.resetTurn();
       try {
-        for await (const ev of service.streamMessage(conversationId.value, text)) applyEvent(ev);
+        for await (const ev of service.streamMessage(conversationId.value, text)) turnEvents.applyEvent(ev);
       } catch (err) {
         // Stream error (backend `error` event, network cut…): keep the user's message 
         // so it can be retried, and show the failure as an assistant bubble.
@@ -253,180 +250,5 @@ export const useTravelStore = defineStore('travel', () => {
     }
   }
 
-  function applyEvent(ev: StreamEvent) {
-    switch (ev.type) {
-      case 'status':
-        streamStatus.value = ev.text;
-        break;
-      case 'agents.start':
-        for (const id of ev.agents) {
-          const key = AGENT_RESEARCH_KEY[id];
-          if (key) research.value[key] = 'active';
-          const row = agentRows.value.find((r) => r.id === id);
-          if (row) row.state = 'active';
-          else agentRows.value.push({ id, label: AGENT_LABELS[id] ?? id, state: 'active' });
-        }
-        break;
-      case 'agent.done': {
-        const row = agentRows.value.find((r) => r.id === ev.id);
-        if (row) row.state = 'done';
-        const key = AGENT_RESEARCH_KEY[ev.id];
-        if (key) research.value[key] = 'done';
-        break;
-      }
-      case 'agent.result': {
-        if (!pendingResults.some((r) => r.id === ev.id)) {
-          pendingResults.push({ id: ev.id, label: AGENT_LABELS[ev.id] ?? ev.id, text: ev.text });
-        }
-        // Show the accordion live under the streaming bubble as well.
-        if (streaming.value) {
-          streaming.value = { ...streaming.value, subagentResults: [...pendingResults] };
-        }
-        break;
-      }
-      case 'research.update':
-        research.value[ev.key] = ev.state;
-        break;
-      case 'requirements.updated':
-        requirements.value = ev.requirements;
-        break;
-      case 'options':
-        optionsByCategory.value = { ...optionsByCategory.value, [ev.category]: mergeOptions(optionsByCategory.value[ev.category] ?? [], ev.options) };
-        pendingTurnOptions = [
-          ...pendingTurnOptions.filter((g) => g.category !== ev.category),
-          { category: ev.category, options: mergeOptions(pendingTurnOptions.find((g) => g.category === ev.category)?.options ?? [], ev.options) },
-        ];
-        break;
-      case 'plan.updated':
-        applyPlan(ev);
-        break;
-      case 'token':
-        if (!streaming.value) {
-          streaming.value = {
-            id: `s${++streamCounter}`,
-            role: 'assistant',
-            kind: 'text',
-            text: '',
-            // Results arrived before the first token: show the accordions
-            // above the answer from the start instead of popping them in
-            // at the end.
-            ...(pendingResults.length ? { subagentResults: [...pendingResults] } : {}),
-            createdAt: new Date().toISOString()
-          };
-        }
-        streaming.value = { ...streaming.value, text: (streaming.value.text ?? '') + ev.text };
-        break;
-      case 'message':
-        if (streaming.value) {
-          if (pendingResults.length) {
-            streaming.value = { ...streaming.value, subagentResults: [...pendingResults] };
-          }
-          cache.value[streaming.value.id] = streaming.value;
-          messageIds.value.push(streaming.value.id);
-          if (ev.message.role !== 'assistant') attachPendingOptions(streaming.value.id);
-          streaming.value = null;
-          pendingResults = [];
-        }
-        cache.value[ev.message.id] = ev.message;
-        messageIds.value.push(ev.message.id);
-        if (ev.message.role === 'assistant') attachPendingOptions(ev.message.id);
-        break;
-      case 'stats': {
-        // Turn usage (tokens/cost/duration): attach to the live bubble if
-        // still streaming, else to the latest assistant message already
-        // flushed to the cache (e.g. destination cards).
-        if (streaming.value) {
-          streaming.value = { ...streaming.value, stats: ev.stats };
-        } else {
-          for (let i = messageIds.value.length - 1; i >= 0; i--) {
-            const m = cache.value[messageIds.value[i]];
-            if (m?.role === 'assistant') {
-              cache.value[m.id] = { ...m, stats: ev.stats };
-              break;
-            }
-          }
-        }
-        break;
-      }
-      case 'title.updated': {
-        const library = useLibraryStore();
-        const row = library.conversations.find((c) => c.id === ev.conversationId);
-        if (row) {
-          row.title = ev.title;
-          row.updatedAt = 'just now';
-        }
-        break;
-      }
-      case 'done':
-        if (streaming.value) {
-          if (pendingResults.length) {
-            streaming.value = { ...streaming.value, subagentResults: [...pendingResults] };
-          }
-          cache.value[streaming.value.id] = streaming.value;
-          messageIds.value.push(streaming.value.id);
-          attachPendingOptions(streaming.value.id);
-          streaming.value = null;
-          pendingResults = [];
-        }
-        break;
-      case 'error':
-        streaming.value = null;
-        throw new Error(ev.message);
-    }
-  }
-
   return { messages, loading, streamStatus, agentRows, streaming, requirements, research, budget, voted, vote, loadConversation, send, optionsByCategory, optionsById, plan, planTotal, planCurrency, planBudget, planOverBudget, drafts, choicesSaved, optionsByMessage, toggleOption, draftChoices, saveChoices };
-});
-
-export const useLibraryStore = defineStore('library', () => {
-  const conversations = ref<Conversation[]>([]);
-  const plans = ref<SavedPlan[]>([]);
-  const loaded = ref(false);
-  // Shared in-flight request: Sidebar and ChatView both call load() on cold
-  // start — the second caller awaits the same request instead of refetching.
-  let loadInflight: Promise<void> | null = null;
-
-  async function load() {
-    loadInflight ??= (async () => {
-      conversations.value = await service.listConversations();
-      plans.value = await service.listSavedPlans();
-      loaded.value = true;
-    })();
-    await loadInflight;
-  }
-  function renameConversation(id: string, title: string) {
-    const c = conversations.value.find((c) => c.id === id);
-    if (c) c.title = title;
-    void service.renameConversationRemote(id, title);
-  }
-  function deleteConversation(id: string) {
-    conversations.value = conversations.value.filter((c) => c.id !== id);
-    void service.deleteConversationRemote(id);
-  }
-  function addPlan(plan: SavedPlan) {
-    if (!plans.value.some((p) => p.id === plan.id)) plans.value.unshift(plan);
-  }
-  function renamePlan(id: string, title: string) {
-    const p = plans.value.find((p) => p.id === id);
-    if (p) p.title = title;
-    void service.renamePlanRemote(id, title);
-  }
-  function deletePlan(id: string) {
-    plans.value = plans.value.filter((p) => p.id !== id);
-    void service.deletePlanRemote(id);
-  }
-  function addConversation(title: string, id?: string): Conversation {
-    const c: Conversation = {
-      id: id ?? service.createConversationId(),
-      title,
-      updatedAt: 'just now',
-      messageIds: []
-    };
-    conversations.value.unshift(c);
-    // Local-only: the backend row is created lazily via ensure_conversation
-    // on the first streamed message, so empty trips are never persisted.
-    return c;
-  }
-
-  return { conversations, plans, loaded, load, renameConversation, deleteConversation, renamePlan, deletePlan, addConversation, addPlan };
 });

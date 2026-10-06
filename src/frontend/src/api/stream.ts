@@ -1,3 +1,16 @@
+/*
+ * Live-turn transport: opens the backend SSE stream and parses its
+ * `event: <type>` / `data: <json>` frames into typed StreamEvents
+ * (`token`, `status`, `options`, `plan.updated`, ...) that the travel
+ * store consumes to update the UI incrementally as the turn runs.
+ * Aborts after a timeout (default 5 min); malformed frames are skipped
+ * without killing the stream. REST wrappers live in travelService.
+ *
+ * Also hosts the protocol constants shared with the backend: the choice
+ * prefix (must stay in sync, it short-circuits extract+router), the
+ * subagent id -> human label for the live status block, and the
+ * subagent id -> research-key mapping for the state panel.
+ */
 import type { ResearchKey, StreamEvent } from '../types';
 
 // First line of the user message for UI button saves. Must stay
@@ -22,7 +35,7 @@ export const AGENT_RESEARCH_KEY: Record<string, ResearchKey> = {
   rental_cars_agent: 'rentalCar'
 };
 
-/** POST yielding parsed SSE events (backend streams them in Fase B). */
+/** POST yielding parsed SSE events from a backend turn stream. */
 export async function* postStream(url: string, body: unknown, timeoutMs = 300000): AsyncGenerator<StreamEvent> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
