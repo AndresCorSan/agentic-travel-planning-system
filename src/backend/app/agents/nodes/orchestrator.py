@@ -83,6 +83,7 @@ async def orchestrator(state: TravelState, config: dict | None = None):
         Partial state update with the orchestration plan and turn usage.
     """
     requirements = state["requirements"]
+    # 1. Offer only agents with working tools (see AVAILABLE_AGENTS above).
     agents = "\n".join(f"- {name}: {AGENT_DESCRIPTIONS[name]}" for name in AVAILABLE_AGENTS)
 
     result = await orchestrator_llm.ainvoke([
@@ -95,7 +96,7 @@ async def orchestrator(state: TravelState, config: dict | None = None):
     ])
     usage = collect_usage([result["raw"]], "orchestrator")
 
-    # The model may emit a tool call it saw in the conversation history
+    # 2. The model may emit a tool call it saw in the conversation history
     # (e.g. update_requirements) instead of the OrchestrationPlan schema,
     # or answer conversationally: in that case there is nothing to
     # delegate and main_llm takes over.

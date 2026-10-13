@@ -90,13 +90,13 @@ def update_requirements(
 
     updated = current.model_copy()
 
-    # Normalize list arguments in case the model sends JSON strings.
+    # 1. Normalize list args (the model may send JSON strings).
     add_interests = _normalize_list(add_interests)
     remove_interests = _normalize_list(remove_interests)
     add_constraints = _normalize_list(add_constraints)
     remove_constraints = _normalize_list(remove_constraints)
 
-    # Update scalar fields only when explicitly provided
+    # 2. Overwrite only explicitly provided scalar fields.
     if origin is not None:
         updated.origin = origin
 
@@ -124,7 +124,7 @@ def update_requirements(
     if accommodation_type is not None:
         updated.accommodation_type = accommodation_type
 
-    # Update interests
+    # 3. Merge interest/constraint deltas without duplicates.
     if add_interests:
         updated.interests = list(
             dict.fromkeys(
@@ -139,7 +139,6 @@ def update_requirements(
             if interest not in remove_interests
         ]
 
-    # Update constraints
     if add_constraints:
         updated.constraints = list(
             dict.fromkeys(

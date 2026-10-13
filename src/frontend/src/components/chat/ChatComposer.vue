@@ -23,7 +23,7 @@ async function fit() {
   el.style.overflowY = el.scrollHeight > MAX_HEIGHT ? 'auto' : 'hidden';
 }
 watch(draft, fit);
-// Suggestion clicks from the welcome hero fill the composer for editing.
+// CONTRACT: `WelcomeHero` suggestions arrive via `draftOverride` for editing before send.
 watch(
   () => props.draftOverride,
   (v) => {

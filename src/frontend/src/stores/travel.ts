@@ -89,9 +89,7 @@ export const useTravelStore = defineStore('travel', () => {
     if (!choices.length || choicesSaved.value[messageId]) return;
     loading.value = true;
     try {
-      // 1. Deterministic save (no LLM). 2. Same user message through the
-      // normal pipeline — like "Let's go with…" for destinations — where
-      // extract+router short-circuit straight to main_llm for confirmation.
+      // 1. Deterministic save (no LLM).
       const res = await service.saveChoices(conversationId.value, choices);
       // Instant UI update from server truth (like the optimistic vote
       // for destinations); the confirm turn re-syncs afterwards.
@@ -124,6 +122,9 @@ export const useTravelStore = defineStore('travel', () => {
         byCategory.set(k, entry);
       }
       const lines = [...byCategory.values()].map((e) => `- ${catLabel(e.category, e.group)}: ${e.names.join(', ')}`);
+      // 2. Same user message through the normal pipeline — like
+      // "Let's go with…" for destinations — where extract+router
+      // short-circuit straight to main_llm for confirmation.
       await send(`${SAVED_CHOICES_PREFIX}\n${lines.join('\n')}`);
     } finally {
       loading.value = false;
@@ -153,7 +154,7 @@ export const useTravelStore = defineStore('travel', () => {
   async function loadConversation(id: string) {
     conversationId.value = id;
     loading.value = true;
-    // Blank slate; backend rehydrate fills it below.
+    // 1. Blank slate; backend rehydrate fills it below.
     messageIds.value = [];
     requirements.value = service.emptyRequirements();
     research.value = service.emptyResearch();
@@ -171,7 +172,7 @@ export const useTravelStore = defineStore('travel', () => {
     streaming.value = null;
     streamStatus.value = '';
     try {
-      // Rehydrate persisted history + graph-owned panel state so a
+      // 2. Rehydrate persisted history + graph-owned panel state so a
       // reload (or backend restart) restores the thread.
       const [msgs, state] = await Promise.all([
         service.getConversationMessages(id).catch(() => []),
@@ -179,13 +180,14 @@ export const useTravelStore = defineStore('travel', () => {
       ]);
       for (const m of msgs) cache.value[m.id] = m;
       messageIds.value = msgs.map((m) => m.id);
-      // Past subagent outputs imply their research already ran.
+      // 3. Past subagent outputs imply their research already ran.
       for (const m of msgs) {
         for (const r of m.subagentResults ?? []) {
           const key = AGENT_RESEARCH_KEY[r.id];
           if (key) research.value[key] = 'done';
         }
       }
+      // 4. Graph-owned panel state wins over the blank slate.
       if (state) {
         if (state.requirements?.length) requirements.value = state.requirements;
         if (state.options) optionsByCategory.value = state.options;
@@ -197,7 +199,7 @@ export const useTravelStore = defineStore('travel', () => {
   }
 
   async function send(text: string) {
-    // Lazy creation: the sidebar row appears with the first message (the
+    // 1. Lazy creation: the sidebar row appears with the first message (the
     // backend ensures its own row too), so empty trips are never stored.
     const library = useLibraryStore();
     if (!library.conversations.some((c) => c.id === conversationId.value)) {
@@ -207,7 +209,7 @@ export const useTravelStore = defineStore('travel', () => {
     cache.value[pending.id] = pending;
     messageIds.value.push(pending.id);
     loading.value = true;
-    // Streaming path: the pending message becomes the final user message.
+    // 2. Streaming path: the pending message becomes the final user message.
     let keepPending = false;
     try {
       streamStatus.value = 'Reasoning…';
@@ -235,7 +237,7 @@ export const useTravelStore = defineStore('travel', () => {
       }
       streaming.value = null;
       keepPending = true;
-      // Keep the sidebar row fresh (the backend emits `title.updated`
+      // 3. Keep the sidebar row fresh (the backend emits `title.updated`
       // once light_llm has enough context — no eager first-message slice).
       const row = library.conversations.find((c) => c.id === conversationId.value);
       if (row) {

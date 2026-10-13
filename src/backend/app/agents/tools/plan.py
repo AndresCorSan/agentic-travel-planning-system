@@ -10,8 +10,8 @@ from langgraph.types import Command
 from app.agents.state import PlanItem, PlanOption, SINGLE_CHOICE_CATEGORIES, get_field, _norm_group
 
 # First line of the user message for UI button saves (POST /choices +
-# normal send, like "Let's go with…"). extract + router short-circuit on
-# it so the turn goes straight to main_llm with no extra LLM calls.
+# normal send, e.g. "I'll go with: ..."). extract + router short-circuit
+# on it so the turn goes straight to main_llm with no extra LLM calls.
 SAVED_CHOICES_PREFIX = "I'll go with:"
 
 
@@ -105,7 +105,7 @@ def present_options(runtime: ToolRuntime, category: str, options: list[dict] | s
     """
     Publish the selectable options for one category (transportation,
     accommodation, activities, rental_car) so the UI can render choice
-    controls and later choices resolve against this canonical list.
+    controls and later choices resolve against this plan_optionsical list.
 
     WHEN TO CALL: after presenting research results in text, call once per
     category with the viable options (the same ones shown in prose, with
@@ -127,6 +127,7 @@ def present_options(runtime: ToolRuntime, category: str, options: list[dict] | s
     per_person (true when the price is per traveler), details (one-line
     extras: times, provider...). Preserve prices exactly as researched.
     """
+    # 1. Validate the option shape; bad shapes error so the LLM retries.
     parsed = _normalize_options(options)
     if not parsed and options:
         # Non-empty input that normalized to nothing (e.g. a dict keyed
@@ -148,8 +149,9 @@ def present_options(runtime: ToolRuntime, category: str, options: list[dict] | s
                 ],
             }
         )
+    # 2. Build the PlanOption models (ids, prices, groups).
     call_group = _norm_group(group)
-    canon: list[PlanOption] = []
+    plan_options: list[PlanOption] = []
     for i, opt in enumerate(parsed):
         oid = str(opt.get("id") or f"{category}-{i + 1}").strip()
         label = str(opt.get("label") or oid).strip()
@@ -157,7 +159,7 @@ def present_options(runtime: ToolRuntime, category: str, options: list[dict] | s
             price = float(opt["price"]) if opt.get("price") is not None else None
         except (TypeError, ValueError):
             price = None
-        canon.append(
+        plan_options.append(
             PlanOption(
                 id=oid,
                 label=label,
@@ -168,16 +170,16 @@ def present_options(runtime: ToolRuntime, category: str, options: list[dict] | s
                 group=_norm_group(opt.get("group") or call_group),
             )
         )
-    # Return only this category: the state reducer merges it with the
-    # other categories (and, within a category, per group), so parallel
-    # calls (one per category per turn) never overwrite each other.
+    # 3. Return only this category: the state reducer (see `agents/state.py`)
+    # merges it with the other categories (and, within a category, per
+    # group), so parallel calls never overwrite each other.
     where = f"{category} [{call_group}]" if call_group else category
     return Command(
         update={
-            "available_options": {category: canon},
+            "available_options": {category: plan_options},
             "messages": [
                 ToolMessage(
-                    content=f"Published {len(canon)} options for {where}.",
+                    content=f"Published {len(plan_options)} options for {where}.",
                     tool_call_id=runtime.tool_call_id,
                 )
             ],
@@ -220,6 +222,7 @@ def add_plan_item(
     Activities accumulate (same option_id twice is ignored). Prices
     snapshot at save time.
     """
+    # 1. Build the item from a published option or explicit fields.
     state = runtime.state
     resolved = _resolve_option(category, option_id, state)
     if resolved is not None:
@@ -248,6 +251,7 @@ def add_plan_item(
             details=str(details or "").strip(),
             group=_norm_group(group),
         )
+    # Unknown id with no label: ask the user to clarify instead of guessing.
     else:
         return Command(
             update={
@@ -259,6 +263,9 @@ def add_plan_item(
                 ],
             }
         )
+    
+    # 2. Merge into the plan: single-choice replaces within (category,
+    # group); activities accumulates (same option twice is ignored).
     plan = list(state.get("trip_plan") or [])
     as_dict = lambda it: it.model_dump() if isinstance(it, PlanItem) else dict(it)
     key = lambda it: (

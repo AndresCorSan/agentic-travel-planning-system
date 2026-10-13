@@ -35,9 +35,10 @@ class Message(Base):
     conversation_id: Mapped[str] = mapped_column(
         String(64), ForeignKey("conversations.id", ondelete="CASCADE"), index=True
     )
-    role: Mapped[str] = mapped_column(String(16))  # user | assistant
+    role: Mapped[str] = mapped_column(String(16))  # Roles: user | assistant
     kind: Mapped[str] = mapped_column(String(32), default="text")
     text: Mapped[str] = mapped_column(Text, default="")
+    # Shape owned by the streaming side-channel (`see api/v1/streaming.py`, `see api/v1/presenters.py`).
     payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 

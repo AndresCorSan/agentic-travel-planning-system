@@ -11,6 +11,7 @@ marked.setOptions({ breaks: true });
 
 export const PRICE_SYMBOLS: Record<string, string> = { EUR: '€', USD: '$', GBP: '£', JPY: '¥' };
 
+// Symbol + thousands separators; ` pp` marks per-person pricing.
 export function formatOptionPrice(o: Pick<PlanOption, 'price' | 'currency' | 'per_person'>): string {
   if (o.price === null || o.price === undefined) return '';
   const code = (o.currency || '').toUpperCase();
@@ -58,11 +59,11 @@ export interface OptionGroup {
   options: PlanOption[];
 }
 
-/** Choice controls grouped by category, rendered under the message.
+// Choice controls grouped by category, rendered under the message.
 // Categories split further by option group, so legs like outbound vs
-// return render as their own selector sections. Same data-option
-// delegation as before; clicks are handled by the host component, so
-// no Vue bindings are needed inside v-html. */
+// return render as their own selector sections. Clicks use the same
+// data-option delegation as before; the host component handles them,
+// so no Vue bindings are needed inside v-html.
 export function renderOptionGroups(groups: OptionGroup[], ctx: OptionRenderCtx): string {
   const parts: string[] = [];
   for (const g of groups) {

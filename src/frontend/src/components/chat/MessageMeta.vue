@@ -8,7 +8,9 @@ import MessageTime from './MessageTime.vue';
 import type { MessageStats } from '../../types';
 
 const props = defineProps<{ createdAt: string; stats?: MessageStats }>();
+// GOTCHA: root keeps class `time` so each parent's scoped style still applies.
 
+// CONTRACT: `stats` carries the backend turn cost (`cost_usd`, `total_tokens`, `duration_s`).
 function compact(n: number): string {
   if (n >= 1000) {
     const v = n / 1000;

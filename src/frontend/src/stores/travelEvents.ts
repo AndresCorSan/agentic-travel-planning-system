@@ -49,9 +49,11 @@ export function createEventApplier(deps: EventApplierDeps) {
 
   function applyEvent(ev: StreamEvent) {
     switch (ev.type) {
+      // Live progress text from the backend.
       case 'status':
         deps.streamStatus.value = ev.text;
         break;
+      // Mark research active and build the live status rows.
       case 'agents.start':
         for (const id of ev.agents) {
           const key = AGENT_RESEARCH_KEY[id];
@@ -61,6 +63,7 @@ export function createEventApplier(deps: EventApplierDeps) {
           else deps.agentRows.value.push({ id, label: AGENT_LABELS[id] ?? id, state: 'active' });
         }
         break;
+      // Close the status row and its research key.
       case 'agent.done': {
         const row = deps.agentRows.value.find((r) => r.id === ev.id);
         if (row) row.state = 'done';
@@ -68,6 +71,7 @@ export function createEventApplier(deps: EventApplierDeps) {
         if (key) deps.research.value[key] = 'done';
         break;
       }
+      // Buffer specialist output for the finalized message.
       case 'agent.result': {
         if (!pendingResults.some((r) => r.id === ev.id)) {
           pendingResults.push({ id: ev.id, label: AGENT_LABELS[ev.id] ?? ev.id, text: ev.text });
@@ -78,12 +82,15 @@ export function createEventApplier(deps: EventApplierDeps) {
         }
         break;
       }
+      // Backend-owned research state for the side panel.
       case 'research.update':
         deps.research.value[ev.key] = ev.state;
         break;
+      // Graph-owned requirements replace the panel list.
       case 'requirements.updated':
         deps.requirements.value = ev.requirements;
         break;
+      // Merge per group; buffer a fallback block for the turn.
       case 'options':
         deps.optionsByCategory.value = { ...deps.optionsByCategory.value, [ev.category]: deps.mergeOptions(deps.optionsByCategory.value[ev.category] ?? [], ev.options) };
         pendingTurnOptions = [
@@ -91,9 +98,11 @@ export function createEventApplier(deps: EventApplierDeps) {
           { category: ev.category, options: deps.mergeOptions(pendingTurnOptions.find((g) => g.category === ev.category)?.options ?? [], ev.options) },
         ];
         break;
+      // Server-truth plan and totals.
       case 'plan.updated':
         deps.applyPlan(ev);
         break;
+      // Tokens stream from main_llm only; see `streaming.stream_turn`.
       case 'token':
         if (!deps.streaming.value) {
           deps.streaming.value = {
@@ -110,6 +119,7 @@ export function createEventApplier(deps: EventApplierDeps) {
         }
         deps.streaming.value = { ...deps.streaming.value, text: (deps.streaming.value.text ?? '') + ev.text };
         break;
+      // Flush the streaming bubble, then store the finalized message.
       case 'message':
         if (deps.streaming.value) {
           if (pendingResults.length) {
@@ -142,6 +152,7 @@ export function createEventApplier(deps: EventApplierDeps) {
         }
         break;
       }
+      // Optimistic sidebar rename; no refetch.
       case 'title.updated': {
         const library = useLibraryStore();
         const row = library.conversations.find((c) => c.id === ev.conversationId);
@@ -151,6 +162,7 @@ export function createEventApplier(deps: EventApplierDeps) {
         }
         break;
       }
+      // Flush any open bubble; the turn had no final message.
       case 'done':
         if (deps.streaming.value) {
           if (pendingResults.length) {
@@ -163,6 +175,7 @@ export function createEventApplier(deps: EventApplierDeps) {
           pendingResults = [];
         }
         break;
+      // Throw to send(), which keeps the user text and shows a failure bubble.
       case 'error':
         deps.streaming.value = null;
         throw new Error(ev.message);

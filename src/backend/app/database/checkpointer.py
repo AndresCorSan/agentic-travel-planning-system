@@ -24,7 +24,6 @@ def checkpoint_path() -> Path:
         The resolved checkpoint database path.
     """
     raw = os.getenv("CHECKPOINT_DB_URL", str(_DEFAULT_CHECKPOINTS))
-    # Same formats as DATABASE_URL (full URL or plain path).
     return resolve_sqlite_path(raw)
 
 

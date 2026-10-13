@@ -10,14 +10,14 @@ class SubagentState(TypedDict):
     messages: Annotated[list, add_messages]
     result: str | None
 
-# Helper for storing the subagent's response into the main graph's state
 def finalize_subagent(state: SubagentState):
+    """Helper for storing the subagent's response into the main graph's state"""
     return {
         "result": state["messages"][-1].content
     }
 
-# Helper for building each subagent's graph
 def build_subagent_graph(agent_node, tool_node):
+    """Helper for building each subagent's graph"""
     graph_builder = StateGraph(SubagentState)
 
     graph_builder.add_node("agent", agent_node)

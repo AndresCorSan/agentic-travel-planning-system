@@ -56,6 +56,7 @@ async def save_choices(conversation_id: str, body: SaveChoicesRequest, graph=Dep
     """
     if graph is None:
         raise HTTPException(status_code=503, detail="Graph not initialized")
+    # 1. Resolve option_ids against live available_options.
     config = trace_config(conversation_id)
     state = await graph.aget_state(config)
     values = state.values or {}
@@ -69,6 +70,7 @@ async def save_choices(conversation_id: str, body: SaveChoicesRequest, graph=Dep
                 return get
         return None
 
+    # 2. Snapshot label/price into the trip plan (replace vs accumulate).
     saved: list[str] = []
     for ch in body.choices:
         get = find(ch.category, ch.option_id)
@@ -93,12 +95,14 @@ async def save_choices(conversation_id: str, body: SaveChoicesRequest, graph=Dep
             _norm_group(it["group"] if isinstance(it, dict) else it.group),
             str(it["option_id"] if isinstance(it, dict) else it.option_id),
         )
+        # Single-choice replaces the (category, group) pick; activities accumulate without duplicates.
         if ch.category in SINGLE_CHOICE_CATEGORIES:
             plan = [it for it in plan if key(it)[:2] != (ch.category, group)]
             plan.append(item)
         elif not any(key(it) == (ch.category, group, str(ch.option_id)) for it in plan):
             plan.append(item)
         saved.append(item.label)
+    # 3. Persist via aupdate_state and return saved labels + plan.
     await graph.aupdate_state(config, {"trip_plan": plan})
     fresh = await graph.aget_state(config)
     return {"saved": saved, "plan": plan_payload(fresh.values or {})}

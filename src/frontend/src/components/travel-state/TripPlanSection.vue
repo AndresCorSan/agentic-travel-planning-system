@@ -36,8 +36,7 @@ const lineDetail = (item: PlanItem) => {
   const price = item.price;
   if (price === null || price === undefined) return '';
   const currency = item.currency ?? props.currency;
-  // Per-person items show the per-person rate below the trip total,
-  // same "/ unit" style as the per-night and per-day hints.
+  // Per-person rate below the trip total, same "/ unit" style as the per-night and per-day hints.
   if (item.per_person && props.travelers && props.travelers > 1) {
     return formatOptionPrice({ price, currency, per_person: true });
   }
@@ -59,8 +58,7 @@ const lineDetail = (item: PlanItem) => {
   }
   return '';
 };
-// Units for the per-night/per-day hints, read only from the option
-// details ("7 nights — …", "2 days — …").
+// Units for the per-night/per-day hints come only from the option details ("7 nights", "2 days").
 const unitsFor = (item: PlanItem, unit: string): number | null => {
   const m = item.details?.match(new RegExp(`(\\d+)\\s*${unit}`, 'i'));
   if (m) {
@@ -73,8 +71,7 @@ const barPct = computed(() => {
   if (!props.budget) return 0;
   return Math.min(100, Math.round((props.total / props.budget) * 100));
 });
-// Items without a known price: the total below is partial until they
-// are priced. Listed in the footnote tooltip by label.
+// Items without a price make the total partial; the footnote tooltip lists them by label.
 const unpricedItems = computed(() =>
   props.items.filter((i) => i.price === null || i.price === undefined)
 );
@@ -93,11 +90,8 @@ const CATEGORY_ICONS: Record<string, string> = {
 };
 const iconFor = (category: string) => CATEGORY_ICONS[category] ?? CATEGORY_ICONS.activities;
 
-// Display order: outbound transportation, accommodation, rental car,
-// activities, then the remaining transportation legs (return...).
-// Within the same slot, save order is preserved (stable sort).
-// Group names come from the LLM ("outbound", "outbound leg 1", ...),
-// so outbound is matched by prefix, not by exact string.
+// Display order is outbound transport, stay, car, activities, then return legs (stable within a slot).
+// GOTCHA: group names come from the LLM, so outbound is matched by prefix, not by exact string.
 const OUTBOUND_PREFIXES = ['outbound', 'outward', 'departure'];
 const RETURN_PREFIXES = ['return', 'inbound', 'homeward'];
 function startsWithWord(text: string, prefix: string): boolean {

@@ -54,9 +54,6 @@ def _status_code(exc: Exception) -> int | None:
     429s arrive in several shapes (status_code attr, status attr, or plain
     text), so each shape is checked in turn.
     """
-    # 429s arrive in several shapes (status_code attr, status attr, or
-    # plain text) — same broad check as streaming.py uses for its
-    # error frame. Missing one means the retry+fallback never engages.
     for attr in ("status_code", "status"):
         code = getattr(exc, attr, None)
         if isinstance(code, int):
@@ -94,7 +91,7 @@ class ResilientChatOpenRouter(ChatOpenRouter):
         return [m for m in models if m]
 
     def _use_model(self, model: str):
-        # `model_name` (alias `model`) is the field the payload is built from.
+        # Payload is built from `model_name` (alias `model`).
         try:
             self.model_name = model
         except Exception:

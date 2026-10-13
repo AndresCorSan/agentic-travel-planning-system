@@ -13,6 +13,7 @@ import type { Destination } from '../../types';
 const props = defineProps<{ messageId: string; chosen: string | null; items?: Destination[] }>();
 const emit = defineEmits<{ choose: [messageId: string, id: string, name: string] }>();
 
+// CONTRACT: `items` carries the backend destination candidates for this turn.
 const items = computed(() => props.items ?? []);
 
 // Optimistic vote for this message wins until the confirmed destination
@@ -20,9 +21,7 @@ const items = computed(() => props.items ?? []);
 const travel = useTravelStore();
 const effective = computed(() => travel.voted[props.messageId] ?? props.chosen);
 
-// Lock only this carousel, and only when the effective destination is one
-// of its own cards: a new round of candidates stays selectable even if an
-// older choice exists.
+// Lock only this carousel when its own card was chosen, so a new round stays selectable.
 const locked = computed(
   () => effective.value != null && items.value.some((d) => d.name === effective.value)
 );

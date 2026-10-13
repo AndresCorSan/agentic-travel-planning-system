@@ -102,7 +102,8 @@ async def stream_turn(graph, conversation_id: str, message: str):
         Raw SSE frame strings, ending with a `done` frame.
     """
     config = trace_config(conversation_id)
-    # Persist the user turn up-front so history survives mid-stream crashes.
+    # 1. Persist the user turn up-front so history survives mid-stream
+    # crashes, then resume the interrupted turn or start a new one below.
     try:
         async with AsyncSessionLocal() as session:
             await repo.ensure_conversation(session, conversation_id)
@@ -130,9 +131,11 @@ async def stream_turn(graph, conversation_id: str, message: str):
         # new reply but stream into the same bubble, so separate them
         # with a blank line (markdown collapses extras, harmless).
         tools_ran = False
+        # 2. Translate node updates into frontend SSE events.
         async for mode, payload in graph.astream(
             stream_input, config=config, stream_mode=["updates", "messages"]
         ):
+            # Branch: token chunks stream text; node updates translate to events.
             if mode == "messages":
                 chunk, metadata = payload
                 if metadata.get("langgraph_node") != "main_llm":
@@ -206,22 +209,16 @@ async def stream_turn(graph, conversation_id: str, message: str):
                         # the gap between token batches.
                         yield frame("status", {"text": "Working on details…"})
                     if node == "main_tools" and output.get("requirements") is not None:
-                        # update_requirements returns a Command carrying the new
-                        # requirements: push them live instead of waiting for
-                        # the turn to finish.
+                        # Push requirements live instead of waiting for the turn (`see agents/tools/requirements.py`).
                         tools_ran = True
                         yield frame(
                             "requirements.updated",
                             {"requirements": requirements_to_items(output["requirements"])},
                         )
                     if node == "main_tools" and output.get("available_options") is not None:
-                        # present_options published selectable options: push
-                        # each touched category so the UI can render choice
-                        # controls. Read the lists back from state (not the
-                        # update payload): parallel same-category calls (one
-                        # per leg, e.g. outbound + return) stream as separate
-                        # updates that the payload merge above would collapse
-                        # to the last leg only.
+                        # Push each touched category for choice controls (`see agents/tools/plan.py`).
+                        # Re-read lists from state, not the payload: parallel same-category
+                        # calls stream as separate updates that the merge above would collapse.
                         tools_ran = True
                         state_now = await graph.aget_state(config)
                         fresh_opts = (state_now.values or {}).get("available_options") or {}
@@ -235,8 +232,7 @@ async def stream_turn(graph, conversation_id: str, message: str):
                                 },
                             )
                     if node == "main_tools" and output.get("trip_plan") is not None:
-                        # add/remove_plan_item changed the plan: push items +
-                        # deterministic total live.
+                        # Push plan items + deterministic total live after plan edits.
                         tools_ran = True
                         state_now = await graph.aget_state(config)
                         yield frame("plan.updated", plan_payload(state_now.values or {}))
@@ -250,10 +246,10 @@ async def stream_turn(graph, conversation_id: str, message: str):
                         if result_text:
                             agent_results[node] = result_text
                             yield frame("agent.result", {"id": node, "text": result_text})
+        # 3. Fold auto-title + usage into stats, then persist the assistant turn.
         final = await graph.aget_state(config)
-        # Turn usage stats, aggregated with `usage.sum_entries` over the
-        # turn's slice of the `turn_usage` channel (see `state.py`).
-        # Best-effort: stats is None when nothing measurable happened.
+        # Aggregate the turn's `turn_usage` slice with `sum_entries` (`see agents/usage.py`, `see agents/state.py`).
+        # Best-effort: stats stays None when nothing measurable happened.
         stats: dict | None = None
         try:
             values = final.values or {}
@@ -321,8 +317,7 @@ async def stream_turn(graph, conversation_id: str, message: str):
         if stats:
             yield frame("stats", {"stats": stats})
         # Persist the assistant turn (text + destination cards + interrupts).
-        # Subagent outputs ride along as the message payload so the
-        # accordions rehydrate exactly as they streamed.
+        # Subagent outputs ride along in the payload for exact rehydrate (`see api/v1/presenters.py`).
         try:
             async with AsyncSessionLocal() as session:
                 await repo.ensure_conversation(session, conversation_id)

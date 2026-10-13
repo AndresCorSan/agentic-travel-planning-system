@@ -9,6 +9,7 @@ const props = defineProps<{ value: string }>();
 
 const tick = ref(0);
 let timer: ReturnType<typeof setInterval> | undefined;
+// Re-evaluate every 30s so messages flip from "now" on their own.
 onMounted(() => {
   timer = setInterval(() => {
     tick.value++;
@@ -18,6 +19,7 @@ onUnmounted(() => {
   if (timer) clearInterval(timer);
 });
 
+// GOTCHA: root keeps class `time` so each parent's scoped style still applies.
 const label = computed(() => {
   void tick.value;
   const raw = String(props.value ?? '').trim();

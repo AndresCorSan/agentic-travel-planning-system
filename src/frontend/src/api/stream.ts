@@ -53,7 +53,7 @@ export async function* postStream(url: string, body: unknown, timeoutMs = 300000
   }
 }
 
-/** Parse `event: <type>\ndata: <json>\n\n` frames from a byte stream. */
+/** SSE frame format from `streaming.stream_turn`: `event: <type>` + `data: <json>`. */
 export async function* readSSE(body: ReadableStream<Uint8Array>): AsyncGenerator<StreamEvent> {
   const reader = body.getReader();
   const decoder = new TextDecoder();

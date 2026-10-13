@@ -126,7 +126,7 @@ async def main_llm_node(state: TravelState, config: dict | None = None) -> dict:
     Returns:
         Partial state update with the assistant message and turn usage.
     """
-    # Extract results from each sub-agent and format them for the main LLM.
+    # 1. Gather specialist research results (one branch per category).
     subagents_results = []
 
     if state.get("weather_results"):
@@ -154,7 +154,7 @@ async def main_llm_node(state: TravelState, config: dict | None = None) -> dict:
             f"Rental car research:\n{state['rental_car_results']}"
         )
 
-    # The LLM receives system prompt + requirements +...
+    # 2. Assemble prompt context: The LLM receives system prompt + requirements +...
     messages = [
         SystemMessage(content=MAIN_LLM_PROMPT),
         SystemMessage(

@@ -92,6 +92,7 @@ def plan_payload(values: dict) -> dict:
 def candidate_to_card(candidate, index: int) -> dict:
     score = get_field(candidate, "score", 0) or 0
     code = (get_field(candidate, "country_code", "") or "").strip().lower()
+    # Blank invalid codes so the UI hides the flag instead of requesting a broken URL.
     if len(code) != 2 or not code.isalpha():
         code = ""
     return {
@@ -290,7 +291,7 @@ def saved_plan_to_dict(row) -> dict:
         "budget": payload.get("budget"),
         "overBudget": bool(payload.get("overBudget", False)),
         "createdAt": created.isoformat() if created else None,
-        # Card subtitle: prefer the saved Dates requirement, else creation date.
+        # Card subtitles prefer saved requirements; empty fallback keeps `next()` from raising.
         "destination": next(
             (r.get("value") for r in (row.requirements or []) if isinstance(r, dict) and r.get("key") == "destination" and r.get("value")),
             "",

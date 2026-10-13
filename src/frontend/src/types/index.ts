@@ -88,7 +88,7 @@ export interface AgentRow {
   state: 'active' | 'done';
 }
 
-// Server-sent events for POST /conversations/{id}/messages (streaming).
+// Server-sent events for POST /conversations/{id}/messages; see `streaming.stream_turn`.
 export type StreamEvent =
   | { type: 'status'; text: string }
   | { type: 'agents.start'; agents: string[] }

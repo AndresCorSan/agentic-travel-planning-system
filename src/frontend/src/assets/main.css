@@ -114,7 +114,9 @@ a:hover {
   color: #e2e5ec;
 }
 
-/* Conversation options popover: narrower panel, tighter padding. */
+/* ------------------------------------------------------------------
+   Conversation options popover: narrower panel, tighter padding. 
+-------------------------------------------------------------------- */
 .conv-opts {
   margin-left: -10px;
 }
@@ -268,8 +270,9 @@ a:hover {
 }
 
 /* ------------------------------------------------------------------
-   Shared: inline option choice controls ([[option:id]] flags).
-------------------------------------------------------------------- */
+   Shared: inline option choice controls. 
+   CONTRACT: inline choice controls for the `[[option:id]]` flags. 
+-------------------------------------------------------------------- */
 .prose .opt-pick {
   display: inline-flex;
   align-items: center;
@@ -322,7 +325,9 @@ a:hover {
   color: var(--p-primary-700);
   white-space: nowrap;
 }
-/* Fallback options block (turn published options but prose has no flags). */
+/* ------------------------------------------------------------------
+   Fallback options block (turn published options but prose has no flags). 
+-------------------------------------------------------------------- */
 .prose .opt-fallback {
   margin-top: 10px;
   border-top: 1px dashed var(--p-surface-200);
@@ -390,7 +395,7 @@ a:hover {
 }
 
 /* ------------------------------------------------------------------
-   Shared: unified loading spinner (option 2 — conic tail).
+   Shared: unified loading spinner.
    Same animation in the composer send button (white on accent circle)
    and in the subagent rows (accent on light). Uses theme vars so the
    accent picker keeps working.
@@ -427,8 +432,6 @@ a:hover {
    Dark selected states. NOTE: `html.dark` (not just `.dark`) on purpose:
    the light rules they override live in scoped SFC styles, which come
    later in the bundle — a specificity tie would lose to them.
-   (Sidebar selected rows intentionally have no dark override: they share
-   the collapsed-rail tinted treatment in both modes.)
 ------------------------------------------------------------------- */
 html.dark .user-bubble {
   background: color-mix(in srgb, var(--p-primary-500) 22%, transparent);
@@ -442,10 +445,12 @@ html.dark .float-composer:focus-within {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--p-primary-500) 35%, transparent);
 }
 
-/* Shared slim hover-reveal scrollbar (chat, sidebar, state panel,
+/* ------------------------------------------------------------------
+   Shared slim hover-reveal scrollbar (chat, sidebar, state panel,
    library pages…): invisible at rest, visible on hover. One per column:
-   chat and card scroll independently, so the bar can't be shared. */
-.slim-scroll {
+   chat and card scroll independently, so the bar can't be shared. 
+-------------------------------------------------------------------*/
+   .slim-scroll {
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
 }
@@ -475,9 +480,11 @@ html.dark .float-composer:focus-within {
   background-clip: content-box;
 }
 
-/* Keyboard-only accent focus ring (:focus-visible never fires on mouse
-   clicks). PrimeVue keeps its preset ring (same family); this covers our
-   native elements (rows, toggles, pills…), which had browser defaults. */
+/* ------------------------------------------------------------------
+  Keyboard-only accent focus ring (:focus-visible never fires on mouse
+  clicks). PrimeVue keeps its preset ring (same family); this covers our
+  native elements (rows, toggles, pills…), which had browser defaults. 
+------------------------------------------------------------------- */
 :focus-visible {
   outline: 2px solid var(--p-primary-600);
   outline-offset: 2px;

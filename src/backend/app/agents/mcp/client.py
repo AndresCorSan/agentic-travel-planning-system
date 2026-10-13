@@ -75,8 +75,8 @@ def _guard_tool(tool):
                 "identical call more than once; report in your result which "
                 "information is missing and why, without inventing it."
             )
-            # MCP tools use response_format="content_and_artifact": the
-            # coroutine must return a (content, artifact) tuple, not a str.
+            # MCP tools use `response_format="content_and_artifact"`.
+            # The coroutine must return a `(content, artifact)` tuple, not a `str`.
             if getattr(tool, "response_format", None) == "content_and_artifact":
                 return error_text, None
             return error_text

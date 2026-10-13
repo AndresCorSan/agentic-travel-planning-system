@@ -47,6 +47,7 @@ def has_title_context(message: str, requirements, candidates) -> bool:
             v = get_field(requirements, n)
             if isinstance(v, list) and any(str(x).strip() for x in v):
                 return True
+    # Short or greeting-led texts carry no trip substance and must never freeze the title.
     text = (message or "").strip().lower()
     if len(message.strip()) < 12:
         return False

@@ -86,7 +86,7 @@ async def destination_research(state: TravelState, config: dict | None = None):
         "turn_usage": collect_usage([result["raw"]], "destination_research"),
     }
 
-# Protocol with the frontend (see ChatView.onChoose): the carousel Choose
+# Protocol with the frontend (see `ChatView.onChoose`): the carousel Choose
 # button always resumes with "Let's go with <name>.". Anything else is a
 # free-text reply (a change request or a manual selection) and needs the
 # full extract -> router loop.
@@ -115,7 +115,7 @@ def route_after_decision(state: TravelState):
 
 # ------------------------------------------------------------------------------
 # Presents the candidates to the user (via an SSE `destinations` message, see
-# api/v1/streaming.py) and pauses for the user's decision.
+# `api/v1/streaming.py`) and pauses for the user's decision.
 # On resume returns both the context SystemMessage (recommendations were
 # already presented) and the user's reply as HumanMessage, in that order.
 def wait_for_decision(state: TravelState):
@@ -133,7 +133,8 @@ def wait_for_decision(state: TravelState):
     """
     # No prompt text: the destinations carousel message already invites the
     # user to choose. A valueless interrupt still pauses/resumes the graph;
-    # _stream skips non-string interrupt values instead of displaying them.
+    # `api/v1/streaming.py` skips non-string interrupt values instead of
+    # displaying them.
     user_input = interrupt(None)
 
     return {

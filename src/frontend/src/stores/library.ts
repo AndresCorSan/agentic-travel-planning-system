@@ -14,8 +14,6 @@ export const useLibraryStore = defineStore('library', () => {
   const conversations = ref<Conversation[]>([]);
   const plans = ref<SavedPlan[]>([]);
   const loaded = ref(false);
-  // Shared in-flight request: Sidebar and ChatView both call load() on cold
-  // start — the second caller awaits the same request instead of refetching.
   let loadInflight: Promise<void> | null = null;
 
   async function load() {

@@ -4,7 +4,6 @@
  * state). Returns [state, toggle]; a missing key falls back to defaultValue.
  */
 import { ref } from 'vue';
-// Missing key falls back to `defaultValue`.
 export function useLocalStorageToggle(key: string, defaultValue = true) {
   const stored = localStorage.getItem(key);
   const state = ref(stored === null ? defaultValue : stored === 'true');

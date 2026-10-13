@@ -1,4 +1,9 @@
-"""CRUD helpers for conversations + message log."""
+"""CRUD helpers for conversations + message log.
+
+None of these commit: they only add/flush, so the calling endpoint
+batches its writes and owns the final `session.commit()` (forgetting
+it silently persists nothing).
+"""
 from __future__ import annotations
 
 from sqlalchemy import delete, select
@@ -53,6 +58,7 @@ async def rename_conversation(session: AsyncSession, conversation_id: str, title
 
 
 async def delete_conversation(session: AsyncSession, conversation_id: str) -> bool:
+    # Messages go first: SQLite does not enforce the ON DELETE CASCADE by default.
     await session.execute(delete(Message).where(Message.conversation_id == conversation_id))
     res = await session.execute(delete(Conversation).where(Conversation.id == conversation_id))
     return bool(res.rowcount)

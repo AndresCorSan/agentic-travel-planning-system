@@ -102,13 +102,13 @@ async def research_router(state: TravelState, config: dict | None = None):
     """
     tid = (config or {}).get("configurable", {}).get("thread_id", "?")
     messages = state.get("messages") or []
-    # Saved-choices confirmations only need the main LLM to acknowledge:
-    # skip the routing call and go straight there.
+    # 1. Short-circuit: saved-choices confirmations only need the main LLM
+    # to acknowledge, so skip the routing call and go straight there.
     if is_ui_choices_confirmation(messages):
         logger.info("[%s] router: route=main_llm (choices confirmation)", tid)
         return {"next_step": "main_llm"}
 
-    # Fast path: Jev decision model via OpenRouter (no text generation).
+    # 2. Fast path: Jev decision model via OpenRouter (no text generation).
     # Falls back to the chat LLM on error, unknown choice, or low confidence.
     sanitized = sanitize_messages_for_llm(state["messages"])
     conversation = "\n".join(
@@ -130,13 +130,14 @@ async def research_router(state: TravelState, config: dict | None = None):
             logger.info("[%s] router: route=%s (via jev, conf=%.2f)", tid, choice, confidence)
             return {"next_step": choice}
 
-    # Fallback: structured output from the chat LLM
+    # 3. Fallback: structured output from the chat LLM.
     result = await structured_router_llm.ainvoke([
         SystemMessage(content=RESEARCH_ROUTER_PROMPT),
         *sanitized,
     ])
     if result.get("parsing_error") is not None:
         logger.warning("Router decision unparseable; falling back to main_llm")
+        # No next_step here: route_next defaults to main_llm when it is unset.
         return {"turn_usage": collect_usage([result["raw"]], "router")}
 
     logger.info("[%s] router: route=%s (via chat llm)", tid, result["parsed"].route)
