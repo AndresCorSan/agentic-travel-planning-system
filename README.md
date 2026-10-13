@@ -1,310 +1,131 @@
-# Travel Intelligence Agent
+<div align="center">
 
-> An agentic AI travel planner built with LangGraph, LangChain, and MCP.
+# Agentic Travel Planning System
 
-## Overview
+**Chat-first multi-agent AI travel planner with LangGraph orchestration + MCPs.**
 
-Travel Intelligence Agent is a web application that helps users research
-and plan trips from natural-language requirements.
+![Python 3.12](https://img.shields.io/badge/Python-3.12-blue)
+![LangGraph](https://img.shields.io/badge/LangGraph-agent_orchestration-orange)
+![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688)
+![Vue 3](https://img.shields.io/badge/Vue-3-4FC08D)
+![Docker](https://img.shields.io/badge/Docker-compose-2496ED)
 
-Instead of asking the user to search flights, hotels, activities,
-weather, and transportation separately, the system coordinates these
-sources, compares alternatives, builds a personalized itinerary, and
-checks whether the result actually satisfies the user's constraints.
+</div>
 
-The project is being developed incrementally, starting with a simple
-LLM-based travel planner and progressively adding external MCPs, custom
-tools, LangGraph orchestration, persistence, observability, and
-evaluation.
+## Key highlights
 
-## What It Does
+- **Cost-optimized by design.** Runs on cheap OpenRouter models (`z-ai/glm-5.3-flash`, `gemma-3-12b-it`) and gets its quality from tight LangGraph workflow control instead of raw model size: small scoped prompts, capped input/output tokens per node, deterministic tools for prices/totals.
+- **Right model tier per task.** Full model for synthesis, minimal-reasoning for requirements extraction and subagent tool loops, light model for routing fallback — never a big model for a small job. Every call goes through OpenRouter, so models and providers are plain IDs and swappable in one line — no vendor lock-in when something better appears.
+- **Jev decision-model routing.** The router uses a Jev decision call (with chat-LLM fallback) instead of burning a full generation on every turn — cheaper and faster for a step that only picks the next route.
+- **Human-in-the-loop UI.** The agent proposes, you dispose: destinations and priced options render as clickable cards/buttons, and your picks are saved deterministically — the LLM confirms, it never invents prices.
+- **Observability with LangSmith and cost-per-turn tracing.** LangSmith tracing plus a `stats` event after every turn: tokens in/out, authoritative OpenRouter cost (`cost_usd`) and duration, shown under each assistant message.
 
-The final system will be able to:
+<sub>* Per-token cost is roughly 15–20× below frontier flagships (≈ $0.15/$0.50 per 1M in/out for GLM-5.3-Flash depending on provider, vs $2/$10 for GPT-6.1 Sol at current OpenRouter rates).</sub>
+<sub>* OpenRouter providers are also pinned per model, cutting both cost and latency versus default routing.</sub>
 
--   Understand travel preferences and constraints expressed in natural
-    language.
--   Compare candidate destinations.
--   Research flights, accommodation, transportation, weather, and
-    activities.
--   Build a personalized day-by-day itinerary.
--   Estimate and validate the total trip budget.
--   Consider practical constraints such as dates and transportation
-    requirements.
--   Review the generated plan before presenting it.
--   Replan when the proposed trip does not satisfy the user's
-    requirements.
--   Provide evidence behind important recommendations.
+## Demo
 
-## Example
+<!-- ![Chat demo](docs/assets/demo.png) -->
 
-**User**
+> Video walkthrough — coming soon. Working on it.
 
-> I want to travel for 10 days in September with my partner, leaving
-> from Madrid. Our budget is €2,500. We like hiking and nature, want to
-> avoid very touristy places, and don't want to rent a car.
+## What it does
 
-**Travel Intelligence Agent**
+Ask for a trip in plain language. The system researches real options and builds a plan you can adjust:
 
-> I've compared several destinations. Madeira is currently the best
-> match for your requirements.
->
-> Estimated trip cost: €2,180
->
-> Why it fits: - Excellent hiking opportunities - Suitable September
-> weather - Within budget - Possible to travel without renting a car
->
-> Main drawback: some hiking areas have limited public transport.
->
-> I can now build a 10-day itinerary based on these requirements.
+1. Understands origin, dates, budget, travelers, interests, constraints.
+2. Compares candidate destinations, then lets you pick one.
+3. Researches flights, hotels, activities, weather and rental cars in parallel via MCP tools.
+4. Publishes priced, selectable options per category (transport, stay, activities, rental car).
+5. Saves choices deterministically and keeps a running total vs. budget.
+6. Saves the finished trip to a plans library you can revisit later.
+7. Streams the whole turn over SSE with per-agent status; persists conversations in SQLite.
 
-The user can then change a requirement, for example:
+Example:
 
-> What if we increase the budget to €3,000?
-
-The system can use the existing travel state and replan rather than
-starting from scratch.
-
-## Getting Started
-
-### Prerequisites
-
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-  (or Docker Engine + Compose v2) — for the recommended Docker setup.
-- An [OpenRouter](https://openrouter.com/) API key — the planner LLM
-  runs through OpenRouter (`xiaomi/mimo-v2.5`). No other keys are
-  required: weather, flights/hotels, activities, and rental cars come
-  from MCP servers that need no personal credentials.
-
-### 1. Configure secrets
-
-Create a `.env` file in the repository root (it is gitignored, never
-committed):
-
-``` text
-OPENROUTER_API_KEY=sk-or-v1-...
-```
-
-Optional variables (also read from the same `.env`):
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `CORS_ORIGINS` | `http://localhost:5173,http://localhost:8080` | Browsers allowed to call the API |
-| `LIGHT_LLM_FALLBACKS` | — | Fallback models for the light LLM |
-| `DATABASE_URL` | `sqlite+aiosqlite:///<backend>/data/app.db` | App data (conversations, plans). Full SQLAlchemy URL or plain path |
-| `CHECKPOINT_DB_URL` | `<backend>/data/checkpoints.db` | LangGraph checkpoints. Same formats as `DATABASE_URL` |
-| `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_ENDPOINT`, `LANGSMITH_PROJECT` | — | LangSmith tracing |
-
-### 2. Run with Docker (recommended)
-
-``` bash
-docker compose up --build
-```
-
-- App: <http://localhost:8080>
-- API: <http://localhost:8000/api/v1> (interactive docs at
-  <http://localhost:8000/docs>)
-
-Notes:
-
-- First backend startup takes ~30s: it downloads the weather MCP via
-  `npx` and loads tools from all four MCP servers. Watch for
-  `MCP tools ready` + `Graph built: 14 nodes` in `docker compose logs backend`.
-- Conversations and LangGraph checkpoints persist in the
-  `backend-data` volume, so they survive `down`/`up`. Run
-  `docker compose down -v` for a clean slate.
-- The frontend talks to `http://localhost:8000/api/v1` (baked in at
-  image build time). To point it elsewhere, rebuild with
-  `--build-arg VITE_API_BASE_URL=...`.
-
-### 3. Or run locally (development)
-
-Backend (from `src/backend`, so `app.*` imports resolve):
-
-``` bash
-uv run uvicorn app.main:app --port 8000
-```
-
-Frontend (from `src/frontend`):
-
-``` bash
-cp .env.example .env   # VITE_API_BASE_URL=http://localhost:8000/api/v1
-npm install
-npm run dev            # http://localhost:5173
-```
-
-The root `.env` with `OPENROUTER_API_KEY` is still required for the
-backend. Restart the backend after any change under `src/backend/app/`
-(no reload configured).
+> Hi! My partner and I want to get away for about 10 days in mid-September, flying from Madrid. Our budget is around €2,500. We love hiking and nature, and we would rather avoid very touristy places.
+> → compares destinations → researches the selected destination → options with prices → plan + €2,180 total.
 
 ## Architecture
 
-The application is built around a small number of focused components:
-
--   **Travel Planner Agent** --- understands requirements, selects
-    destinations, coordinates research, and builds the travel plan.
--   **Travel Critic Agent** --- reviews the proposed plan and determines
-    whether it satisfies the user's requirements.
--   **LangGraph** --- orchestrates the workflow, manages shared state,
-    parallel research, conditional routing, and replanning.
--   **MCP** --- provides standardized access to external travel
-    capabilities.
--   **Custom tools** --- handle deterministic application logic such as
-    budget calculation and constraint validation.
-
-The detailed architecture, workflow, persistence model, integrations,
-and design decisions are documented in
-[`architecture.md`](./docs/architecture.md).
-
-## MCP Integrations
-
-The project is intentionally built around a combination of external and
-custom MCP servers.
-
-| MCP | Purpose |
-|---|---|
-| Weather MCP | Weather forecasts and historical weather |
-| trvl MCP | Flights, hotels, trains, buses, ferries, and rental cars |
-| TicketLens MCP | Activities, attractions, and experiences |
-| Custom Maps MCP | Geocoding, places, routes, distances, and travel times |
-
-The project also uses regular application tools for deterministic
-operations such as budget calculation, constraint validation, and trip
-scoring.
-
-## Tech Stack
-
-| Technology | Role |
-|---|---|
-| Python | Core application |
-| LangGraph | Agent orchestration and workflow |
-| LangChain | LLM and tool integration |
-| MCP | External tool interoperability |
-| FastAPI | Backend API |
-| Vue.js | Web application |
-| MariaDB | Application persistence |
-| LangSmith | Observability and evaluation |
-
-## Development Progress
-
-The project is developed incrementally. Each phase adds a meaningful
-capability to the system.
-
-### Phase 1 — Initial Travel Agent
-
-- [x] Create the basic LLM chat loop
-- [x] Add the initial system prompt
-- [x] Refine the Travel Planner's personality and tone
-- [x] Test and refine the agent with realistic travel scenarios
-
-### Phase 2 — Structured Travel State
-
-- [x] Define the initial `TravelState`
-- [x] Make the Travel Planner produce structured requirements
-- [x] Store the structured requirements in the graph state
-- [x] Add LangGraph checkpointing
-- [x] Verify that travel state persists across interactions
-- [x] Verify that travel state updates when needed
-
-### Phase 3 — External Capabilities
-
-- [x] Integrate the Weather MCP into the existing graph
-- [x] Use weather data in destination recommendations
-- [x] Integrate the trvl MCP
-- [x] Use real travel data in the planning process
-- [x] Integrate the TicketLens MCP
-- [x] Use activity data in destination recommendations
-- [x] Integrate the OctoTrip Rental Cars MCP
-- [x] Use rental car data in destination recommendations
-
-### Phase 4 — Destination Research
-
-- [x] Add an initial requirements extraction node
-- [x] Add router node for deciding whether destination research is needed
-- [x] Generate a shortlist of candidate destinations
-- [x] Score and compare candidate destinations
-- [x] Let the user select one of those destinations
-
-### Phase 5 — Parallel Multi-Agent Research
-
-- [x] Orchestrate specialized travel-research subagents and execute them in parallel
-- [x] Implement iterative MCP tool use within each subagent and store their results in the shared state
-- [x] Pass the available research results to the main LLM for final synthesis
-
-### Phase 6 — Plan & Budget
-
-- [x] Define the structured travel-plan representation
-- [x] Generate a complete plan from the research results
-- [x] Add deterministic budget calculation
-
-### Phase 7 — Critic & Replanning (discarded)
-
-Discarded: an LLM-based critic with a planner → critic → replan loop was
-evaluated and deliberately dropped — the human-in-the-loop design (the
-agent proposes, the user chooses with live prices and totals) already
-covers the failure mode a critic exists for. See [Travel Critic Agent (discarded)](./docs/architecture.md#travel-critic-agent-discarded).
-
-### Phase 8 — Conversational Web Prototype
-
-- [x] Create initial frontend prototype
-- [x] Expose the LangGraph workflow through a minimal web interface
-- [x] Build the conversational chat interface
-- [x] Support multi-turn conversations and LangGraph interrupts/resume
-- [x] Display subagents responses as complementary info
-- [x] Support thread-based conversations
-- [x] Display current travel requirements and planning state
-- [x] Let users pick research options in the chat (human-in-the-loop implementation)
-- [x] Display trip plan and budget information
-- [x] Allow saving the current trip plan to the "Saved plans" library
-
-### Phase 9 — Persistence & Production Backend
-
-- [x] Persist sessions, requirements, research, and trip plans in SQLite
-- [x] Add production-oriented LangGraph checkpointing
-- [x] Expose the planning workflow through FastAPI
-- [x] Connect the web application to persistent backend data
-
-### Phase 10 — Observability, Evaluation & Release
-
-- [x] Integrate LangSmith tracing
-- [x] Create a representative evaluation dataset
-- [ ] Decide which agent metrics to evaluate
-- [ ] Add automated evaluation of generated plans
-- [x] Measure latency, token usage, and cost
-- [ ] Complete documentation and architecture diagrams
-- [x] Add Docker deployment (backend + frontend images, compose with persistent SQLite)
-- [ ] Deploy a public demo
-- [ ] Publish the first release
-
-## Project Structure
-
-The repository structure will evolve as development progresses. The
-intended high-level structure is:
-
-``` text
-travel-intelligence-agent/
-├── src/
-|   ├── frontend/
-|   └── backend/
-├── mcp/
-├── tests/
-├── evaluation/
-├── docs/
-├── README.md
-└── ...
+```text
+user message (SSE)
+  → extract_requirements → router
+    → destination_research → interrupt (wait for pick) → resume
+    → orchestrator → weather / transport / accommodation / activities / rental-cars (parallel)
+  → main_llm (streams tokens, publishes options, edits plan)
 ```
 
-## Documentation
+- One shared LangGraph app built at startup; `thread_id = conversation_id`.
+- Destination pick pauses via `interrupt()` and resumes on the next turn; saved-choices confirmations skip extract + router and go straight to main_llm.
+- Frontend: Vue 3 chat + requirements panel + plan/budget sidebar + saved-plans library.
+- Details: [`docs/architecture.md`](docs/architecture.md).
 
--   [`architecture.md`](./architecture.md) --- system architecture,
-    agents, LangGraph workflow, MCPs, persistence, frontend,
-    observability, evaluation, and development phases.
+## Tech stack
 
-## Project Status
+| Layer | Choice |
+|---|---|
+| Orchestration | LangGraph (subgraphs per research agent, SQLite checkpointer) |
+| LLMs | OpenRouter `z-ai/glm-5.3-flash` (main), `google/gemma-3-12b-it` (light tasks), Jev decision model for routing |
+| Backend | FastAPI, SSE streaming, SQLite (`data/app.db` + `data/checkpoints.db`) |
+| Travel data (MCP) | `trvl` CLI (flights/hotels/transport), TicketLens (POIs/tours), `weather-mcp` (forecast/history), OctoTrip (rental cars) |
+| Frontend | Vue 3 + PrimeVue + Pinia + Vue Router, axios, marked + DOMPurify |
+| Deploy | Docker Compose (backend `:8000`, frontend `:8080`) |
 
-This project is under active development. The architecture is defined,
-but implementation is being built incrementally so that each major
-capability can be developed and evaluated independently.
+## Quickstart
 
-## License
+Prereq: an [OpenRouter](https://openrouter.ai/) API key.
 
-To be defined.
+```bash
+# 1. Secrets (gitignored, never committed)
+echo "OPENROUTER_API_KEY=sk-or-v1-..." > .env
+
+# 2. Run
+docker compose up --build
+
+# 3. Open
+# App: http://localhost:8080
+# API docs: http://localhost:8000/docs
+```
+
+First backend boot takes ~30s (downloads weather MCP via `npx`, loads all MCP tools).
+Watch for `MCP tools ready` + `Graph built` in `docker compose logs backend`.
+Data persists in the `backend-data` volume (`down -v` resets it).
+
+Local dev: backend `uv run uvicorn app.main:app --port 8000` from `src/backend`;
+frontend `npm run dev` from `src/frontend` (`http://localhost:5173`).
+
+## Project structure
+
+```text
+src/
+  backend/app/      # FastAPI + LangGraph (agents/, api/v1/, database/, evals/)
+  frontend/src/     # Vue 3 (views/, components/, stores/, api/, router/)
+docs/architecture.md
+docker-compose.yml
+```
+
+Legacy `notebooks/` holds the incremental prototypes from the early development phases; `src/` is the current full app. More in `docs/architecture.md` (project structure docs to be expanded there).
+
+## Known issues
+
+- The `trvl` intent `search_hotels` returns very large payloads. The accommodation agent is prompted to prefer `search_accommodations` (leaner) and only fall back to `search_hotels` when it returns nothing useful — but the fallback can still fire and inflate token usage.
+- Pulling large historical weather datasets can also return token-heavy responses. The weather subagent is prompted to request only the minimum history window needed, so this is rare.
+- The OctoTrip rental-cars MCP goes down occasionally; the graph builds without it and the subagent reports the gap instead of failing the turn.
+- Prices and availability come from free MCP tiers, so treat them as indicative rather than exact. A production setup would use paid travel-data providers.
+
+## Future work
+
+- Automated evaluation of conversations and plans (Jev-as-a-judge).
+- Migrate SQLite → PostgreSQL or MariaDB.
+- Context compaction for very long conversations.
+
+## Author
+
+**Andrés Corbacho Sánchez**
+End-to-end design and build: LangGraph orchestration, FastAPI backend, Vue 3 frontend, MCP integrations, Docker deploy.
+
+[![GitHub](https://img.shields.io/badge/GitHub-AndresCorSan-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/AndresCorSan)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-andres--corbacho-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/andres-corbacho)
+
+License: MIT (see `LICENSE`).
