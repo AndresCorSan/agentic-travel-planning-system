@@ -1,19 +1,30 @@
-# Travel Intelligence Agent — Architecture
+# Agentic Travel Planning System — Architecture
+
+- [1. Overview](#1-overview)
+- [2. Problem](#2-problem)
+- [3. Goals](#3-goals)
+- [4. LangGraph Workflow](#4-langgraph-workflow)
+- [5. Human-in-the-Loop Protocol](#5-human-in-the-loop-protocol)
+- [6. Tools & MCP](#6-tools--mcp)
+- [7. Persistence](#7-persistence)
+- [8. Web Application](#8-web-application)
+- [9. Observability](#9-observability)
+- [10. Evaluation](#10-evaluation)
+- [11. Project Structure](#11-project-structure)
+- [12. Development Phases](#12-development-phases)
 
 ## 1. Overview
 
-Travel Intelligence Agent is an AI-powered travel research and planning
-assistant.
+Agentic Travel Planning System is a chat-first, multi-agent travel planner. Users describe trips in natural language; the system extracts structured requirements, compares candidate destinations, researches flights, accommodation, activities, weather, and rental cars in parallel through MCP tools, and assembles a trip plan from priced options the user picks, with deterministic budget tracking.
 
-The system helps users find and plan trips based on their personal preferences,
-constraints, and objectives. Instead of simply generating an itinerary, the
-agent researches real-world travel options, compares alternatives, validates
-constraints, and replans when necessary.
+Its defining properties:
 
-The system is built around **LangGraph** for agent orchestration and
-**Model Context Protocol (MCP)** for accessing external travel capabilities.
+- Human-in-the-loop: destinations and plan options are chosen in the UI, never guessed by the model (see [§5 Human-in-the-Loop Protocol](#5-human-in-the-loop-protocol)).
+- Deterministic plan edits: choices are persisted server-side with snapshotted prices; the LLM only confirms them (see [§5 Human-in-the-Loop Protocol](#5-human-in-the-loop-protocol) and [§6 Tools & MCP](#6-tools--mcp)).
+- Cost-engineered: tiered cheap models, Jev decision routing, capped token budgets, and per-turn cost stats.
+- Persistent: conversations, saved plans, and graph checkpoints survive backend restarts in SQLite (see [§7 Persistence](#7-persistence)).
 
----
+The system is built around **LangGraph** for agent orchestration and **Model Context Protocol (MCP)** for accessing external travel capabilities.
 
 ## 2. Problem
 
@@ -26,14 +37,9 @@ Planning a trip requires combining information from multiple sources:
 - Activities
 - Destinations
 
-Current travel platforms are good at searching individual components, but
-users still have to manually combine this information and determine which
-option best fits their specific constraints.
+Current travel platforms are good at searching individual components, but users still have to manually combine this information and determine which option best fits their specific constraints.
 
-The goal is to provide a single agentic system capable of performing this
-research and producing a coherent, personalized travel plan.
-
----
+The goal is to provide a single agentic system capable of performing this research and producing a coherent, personalized travel plan.
 
 ## 3. Goals
 
@@ -42,162 +48,55 @@ research and producing a coherent, personalized travel plan.
 - Use real-world travel data through MCP tools.
 - Respect user constraints such as budget, dates and transportation.
 - Generate personalized itineraries.
-- Validate proposed plans before presenting them.
-- Replan when constraints cannot be satisfied.
-- Provide evidence for important recommendations.
+- Let the user validate plans by picking from priced options.
+- Replan from updated requirements without starting over.
+- Show the research behind recommendations.
 - Maintain travel-planning state across interactions.
 
----
+## 4. LangGraph Workflow
 
-## 4. Example User Interaction
+LangGraph orchestrates the planning process around one shared object, the `TravelState` (`agents/state.py`): a TypedDict every node reads and partially updates. Its channels: `messages` (append-only conversation); `requirements` (structured `TravelRequirements`, or `None` before extraction); `next_step` (the router's decision); `destination_candidates` (scored shortlist); `orchestration_plan` (which subagents run); one append-only result channel per research agent; `available_options` (selectable options per category, merged per group so parallel publishes never overwrite each other); `trip_plan` (saved choices with snapshotted prices); `turn_usage` (one cost entry per LLM call in the turn).
 
-**User**
+The figure below shows the full topology as implemented: the left-to-right main flow (blue sequential pipeline, purple orchestration, green research fan-out, orange synthesis) plus one research subagent expanded on the right.
 
-> I want to travel for 10 days in September with my partner, leaving from
-> Madrid. Our budget is €2,500. We like hiking and nature, want to avoid very
-> touristy places, and don't want to rent a car.
+<img src="./images/LangGraph_Workflow.png" width="900">
 
-**Agent**
+Notes:
 
-> I've compared 12 destinations. My top recommendation is Madeira (91/100).
->
-> Estimated cost: €2,180
->
-> Why:
-> - Excellent hiking opportunities
-> - Suitable September weather
-> - Fits your budget
-> - Possible to travel without renting a car
->
-> Main drawback: some hiking areas have limited public transport.
->
-> I can now build a 10-day itinerary for Madeira.
+- `orchestrator` fans out to research **subgraphs** (weather, transportation, accommodation, activities, rental cars), each a ReAct loop over its MCP tools. They register dynamically — only agents with working tools exist.
+- `thread_id = conversation_id`: one checkpointer key per conversation, so turns resume state across interactions and restarts.
+- Destination pick pauses via `interrupt()` in `wait_for_decision` and resumes on the next user turn (see [§5 Human-in-the-Loop Protocol](#5-human-in-the-loop-protocol)).
+- Saved-choices confirmations skip `extract` + `router` and go straight to `main_llm` (see [§5 Human-in-the-Loop Protocol](#5-human-in-the-loop-protocol)).
+- Tool exceptions are caught (`_guard_tool`) so a failing MCP call becomes text the subagent reports instead of killing the stream.
 
-The user can then modify the requirements:
+### Nodes
 
-> What if we increase the budget to €3,000?
+- **extract_requirements** — parses the user message into structured `TravelRequirements` (minimal-reasoning LLM, structured output). Runs first every turn except saved-choices confirmations.
+- **router** — picks the next route via a Jev decision call, with a light-LLM structured-output fallback on error or low confidence: `main_llm` for chit-chat, off-topic, or questions answerable from state; `destination_research` when no destination is settled and the user wants ideas/comparison; `orchestrator` only when concrete bookable options are explicitly requested.
+- **destination_research** — builds and scores a shortlist of candidate destinations from requirements + live data.
+- **wait_for_decision** — pauses with `interrupt()` until the user picks. The pick happens on UI buttons (destination carousel): clicking injects a user message `Let's go with <name>` so the turn resumes to `main_llm` with the choice in context; any other text goes back to `extract`.
+- **orchestrator** — from the user's requirements, decides which research subagents the request needs and fans out to them in parallel. Only agents with loaded MCP tools are offered (`AVAILABLE_AGENTS`).
+- **Research subagents** (weather, transportation, accommodation, activities, rental cars) — one ReAct loop each over its MCP tools with the minimal-reasoning model; each returns its top findings into shared state.
+- **main_llm (+ main_tools)** — synthesizes research into the reply and calls the plan tools (`present_options`, `add/remove_plan_item`) as needed. Its tokens are the only ones streamed live; subagent findings arrive separately as completed accordion blocks (`agent.result` events).
 
-The system updates the existing state and replans instead of starting from
-scratch.
+## 5. Human-in-the-Loop Protocol
 
----
+The agent proposes options, the user picks — via two machine-readable message protocols:
 
-## 5. High-Level Architecture
+- **Destination pick.** After `destination_research` presents the shortlist as a carousel, the user picks one on the UI buttons. Clicking sends `Let's go with <name>` (`CHOOSE_PREFIX` in `agents/nodes/destinations.py`); anything else re-enters extract → research.
+- **Choice save.** After the subagents present their findings, each category's alternatives (e.g. different flight options) render as selectable cards. `POST /choices` persists the selected option_ids against live `available_options` deterministically, then the frontend sends `I'll go with:` plus one `- Category: label` line per pick (`SAVED_CHOICES_PREFIX` in `agents/tools/plan.py`). Single-choice categories (transportation, accommodation, rental_car) replace the previous pick within the same group; activities accumulate. New searches overwrite `available_options` but never touch `trip_plan`.
 
-<img src="./images/high-level-architecture.png" width="700">
+Because prices are snapshotted server-side at save time, the LLM only confirms choices — it never invents prices.
 
+## 6. Tools & MCP
 
----
-
-## 6. Agents
-
-### Travel Planner Agent
-
-The main agent responsible for understanding the user's requirements,
-selecting the most suitable destination, coordinating travel research, and
-building the final travel plan.
-
-It can:
-
-- Interpret user preferences and constraints.
-- Identify and compare candidate destinations.
-- Decide which information needs to be researched.
-- Combine flight, accommodation, activity, and transportation options.
-- Build and optimize the travel plan.
-- Trigger replanning when the current plan does not satisfy the requirements.
-
-The agent uses external capabilities through MCP tools and does not directly
-handle provider-specific integrations.
-
-### Travel Critic Agent (discarded)
-
-> **Design decision (evaluated, not implemented):** an LLM-based critic with
-> a bounded planner → critic → replan loop was considered and deliberately
-> discarded:
->
-> - **Latency/cost** — every turn pays at least one extra LLM call (more on
->   replan), very noticeable in an interactive chat.
-> - **False positives** — the critic can misread a requirement and reject a
->   valid plan, triggering a "repair" that makes the result worse.
-> - **Unnecessary by design** — the system is human-in-the-loop: the agent
->   proposes researched options with live prices and totals, and the user
->   chooses. The failure mode the critic exists for (the agent deciding
->   badly on its own) does not occur here; validation happens in the UI,
->   where the user sees totals vs. budget and picks accordingly.
-> - **Low demo value** — the visible output (a "valid" badge) duplicates
->   what the user already sees in the trip-plan panel.
->
-> End-to-end testing showed the planner already produces
-> constraint-satisfying plans reliably, so a critic loop adds cost without
-> measurable benefit.
-
----
-
-## 7. LangGraph Workflow
-
-LangGraph orchestrates the complete planning process and manages the shared
-state between the agents, tools, and deterministic components.
-
-The main workflow is:
-
-```text
-User Request
-     │
-     ▼
-Travel Planner Agent
-     │
-     │ Select destination
-     ▼
-Destination Research
-     │
-     ├──────────┬───────────┬────────────┐
-     ▼          ▼           ▼            ▼
-  Flights     Hotels    Activities   Transport
-     │          │           │            │
-     └──────────┴───────────┴────────────┘
-                       │
-                       ▼
-                  Plan Builder
-                    + Budget
-                       │
-                       ▼
-              Travel Critic Agent
-                       │
-                 ┌─────┴─────┐
-                 │           │
-               Valid       Invalid
-                 │           │
-                 ▼           ▼
-           Final Response   Replan
-                             │
-                             ▼
-                    Travel Planner Agent
-                             │
-                             └──► Research
-```
-
-If the critic determines that the plan does not satisfy the user's
-requirements, LangGraph routes execution back to the Travel Planner Agent,
-which can modify the plan and repeat the necessary research.
-
-The number of replanning attempts is bounded to prevent uncontrolled loops.
-
-LangGraph is responsible for workflow orchestration, shared state,
-parallel execution, conditional routing, and replanning.
-
----
-
-## 8. Tools & MCP
-
-The system uses **MCP for external travel capabilities** and custom tools for
-internal deterministic logic.
+The system uses **MCP for external travel capabilities** and custom tools for internal deterministic logic.
 
 ### External MCPs
 
 #### [Weather MCP](https://github.com/weather-mcp/weather-mcp)
 
-Provides weather information used to evaluate destinations and build
-weather-aware itineraries.
+Provides weather information used to evaluate destinations and build weather-aware itineraries.
 
 Main capabilities:
 
@@ -205,15 +104,14 @@ Main capabilities:
 * Historical weather
 * Location search
 
-#### [trvl MCP](https://github.com/MikkoParkkola/trvl)
+#### [trvl CLI](https://github.com/MikkoParkkola/trvl)
 
-Provides travel search capabilities across multiple transportation and
-accommodation categories.
+Exposes a **single `travel` router tool** (`query` / `intent` / `params`): `search_flights` and the remaining intents are values, not separate tools — this keeps the LLM tool surface small and stable.
 
 Main capabilities:
 
 * Flights
-* Hotels
+* Accommodation (prefers lean `search_accommodations`; `search_hotels` only as fallback — see Known Issues in the README)
 * Trains
 * Buses
 * Ferries
@@ -237,26 +135,18 @@ Main capabilities:
 * Search rental cars
 * Compare rental offers and prices
 
----
+### Application tools (deterministic)
 
-### Custom Tools
+Capabilities that must not depend on LLM judgment are plain tools / code, so prices and totals are computed, never generated:
 
-Some capabilities do not require MCP and will be implemented as regular
-application tools or deterministic code:
+* `present_options` — publishes one category's selectable options (with per-leg `group`s) for the UI to render.
+* `add_plan_item` / `remove_plan_item` — snapshot label/price into `trip_plan` (single-choice replace vs. activities accumulate).
+* `update_requirements` — structured requirement edits from chat.
+* `plan_total()` — trip total: per-person prices × travelers, most common currency wins (no FX conversion).
 
-* `calculate_budget()` — calculates the estimated total trip cost.
-* `validate_constraints()` — checks hard constraints such as budget, dates,
-  duration, and transportation requirements.
-* `calculate_trip_score()` — evaluates candidate plans according to the user's
-  preferences and requirements.
+The distinction is intentional: **MCP is used for external capabilities that benefit from a standardized tool interface, while internal business logic is implemented directly as application tools.**
 
-The distinction is intentional: **MCP is used for external capabilities that
-benefit from a standardized tool interface, while internal business logic is
-implemented directly as application tools.**
-
----
-
-## 9. Persistence
+## 7. Persistence
 
 **SQLite** stores application data such as:
 
@@ -266,43 +156,66 @@ implemented directly as application tools.**
 - Research results (via graph checkpoints)
 - Itineraries (trip plan snapshots)
 
-**LangGraph checkpointing** (`AsyncSqliteSaver`, `checkpoints.db`) persists
-graph execution state, allowing conversations and travel-planning workflows
-to continue across interactions **and backend restarts**
-(`thread_id = conversation_id`).
+**LangGraph checkpointing** (`AsyncSqliteSaver`, `checkpoints.db`) persists graph execution state, allowing conversations and travel-planning workflows to continue across interactions **and backend restarts** (`thread_id = conversation_id`).
 
-Application data (`app.db`: `conversations`, `messages`) and LangGraph
-execution state (`checkpoints.db`) are separate concerns — and separate
-files. Both go through a single `DATABASE_URL`-style configuration
-(`DATABASE_URL` / `CHECKPOINT_DB_URL`) so a future move to Postgres is a
-config change, not a code change.
+Application data (`app.db`: `conversations`, `messages`) and LangGraph execution state (`checkpoints.db`) are separate concerns — and separate files. Both go through a single `DATABASE_URL`-style configuration (`DATABASE_URL` / `CHECKPOINT_DB_URL`) so a future move to Postgres is a config change, not a code change.
 
----
+## 8. Web Application
 
-## 10. Web Application
+The application uses **Vue 3 + PrimeVue + Pinia** for the frontend and **FastAPI** for the backend API, connected by REST plus an SSE turn stream (`api/v1/streaming.py`).
 
-The application will use **Vue.js** for the frontend and **FastAPI** for the
-backend API.
+The web application provides:
 
-The web application will provide:
+- **Chat** — multi-turn planning with live per-agent status and token streaming.
+- **Destination comparison** — candidate carousel with scored recommendations; one click sends the pick (`Let's go with …`).
+- **Priced options UI** — per-category choice controls bound to `available_options`; picks save via `POST /choices`.
+- **Trip plan + budget** — timeline sidebar with running total vs. budget and per-turn cost stats under each reply.
+- **Plans library** — saved trips persisted in SQLite, revisit later.
 
-- **Chat** — interact with the travel agent.
-- **Destination comparison** — compare recommended destinations.
-- **Interactive map** — visualize destinations, activities, and routes.
-- **Itinerary** — view the generated trip day by day.
-- **Budget** — visualize estimated costs.
-- **Evidence** — inspect the sources behind important recommendations.
+FastAPI is the only gateway between the Vue frontend and the agentic system; LangGraph manages the travel-planning workflow.
 
-FastAPI will act as the main backend API between the Vue.js frontend and the
-agentic system, while LangGraph manages the travel-planning workflow.
+### API Contract
 
----
+Paths relative to `/api/v1`:
 
-## 11. Observability
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/conversations` | List conversations (sidebar). |
+| `POST` | `/conversations` | Create a conversation. |
+| `GET` | `/conversations/{id}/messages` | Message history. |
+| `GET` | `/conversations/{id}/state` | Rehydrate client state (requirements, research, plan). |
+| `PATCH` | `/conversations/{id}` | Rename (title). |
+| `DELETE` | `/conversations/{id}` | Delete with messages. |
+| `POST` | `/conversations/{id}/messages` | Send a message; streams the turn as SSE (see below). |
+| `POST` | `/conversations/{id}/choices` | Deterministic choice save; returns saved labels + refreshed plan. |
+| `POST` | `/conversations/{id}/plans` | Snapshot the current trip plan into the library. |
+| `GET` | `/plans` | List saved plans. |
+| `GET` | `/plans/{plan_id}` | Plan detail. |
+| `PATCH` | `/plans/{plan_id}` | Rename a saved plan. |
+| `DELETE` | `/plans/{plan_id}` | Delete a saved plan. |
 
-The system will use **LangSmith** to monitor and debug agent executions.
+### SSE Events
 
-Tracked information will include:
+`POST …/messages` streams one turn as `StreamEvent` frames (`frontend/src/types/index.ts`), ending with `done`:
+
+| Event | Carries |
+|---|---|
+| `status` | Phase text while the turn runs. |
+| `agents.start` / `agent.done` | Live subagent rows (start / finish). |
+| `agent.result` | One subagent's completed findings (accordion block). |
+| `research.update` | Per-category research state (`pending` / `active` / `done`). |
+| `requirements.updated` | Structured requirements for the side panel. |
+| `options` | Priced options of one category (choice controls). |
+| `plan.updated` | Trip plan + deterministic total. |
+| `token` | Live text tokens — `main_llm` only. |
+| `message` | Final assistant message object. |
+| `stats` | Turn usage: tokens in/out, `cost_usd`, duration. |
+| `title.updated` | Auto-generated conversation title. |
+| `done` / `error` | End of stream / friendly failure (e.g. rate limit). |
+
+## 9. Observability
+
+The system uses **LangSmith** (traces, node runs, tool calls) plus per-turn usage accounting:
 
 * LangGraph runs
 * Node execution
@@ -310,36 +223,32 @@ Tracked information will include:
 * Errors
 * Latency
 * Token usage
-* Estimated cost
+* Estimated cost (`cost_usd`, authoritative OpenRouter pricing)
 
----
+On top of tracing, each turn folds its `turn_usage` slice into a `stats` event streamed to the UI (tokens in/out, cost, duration) — cost control is visible, not theoretical.
 
-## 12. Evaluation
+## 10. Evaluation
 
-The system includes a reproducible, fully local evaluation setup
-(`src/backend/evals/`): a versioned dataset of realistic travel requests,
-a simulator harness that drives the graph through complete multi-turn
-conversations, and a Jev-as-judge scorer. Deliberately no LangSmith
-dependency at eval time — iteration speed (pytest in seconds) matters more
-than cloud dashboards while the judge questions are being calibrated.
+> Status: pending — the dataset below exists and is used for manual spot-checks, but automated scoring is not implemented yet.
+
+Evaluation is dataset-first (`src/backend/evals/dataset.jsonl`): 50 realistic travel requests with expected outcomes. A simulator harness that drives multi-turn conversations plus a Jev-as-judge scorer are planned (see Future Work in the README) — deliberately no LangSmith dependency at eval time, so iteration stays a local pytest run while the judge questions are calibrated.
 
 Key metrics:
 
 * **Constraint satisfaction** — does the plan respect user requirements?
 * **Recommendation quality** — are destinations relevant?
 * **Groundedness** — are important claims supported by retrieved data?
-* **Replanning success** — can the agent recover from an invalid plan?
+* **Recovery success** — can the agent replan from changed requirements?
 * **Tool efficiency** — does the agent use tools appropriately?
 * **Latency and cost** — how expensive and slow is a planning session?
 
 ### Evaluation dataset (`src/backend/evals/dataset.jsonl`)
 
-One JSON object per line, 50 cases (`eval-001`…`eval-050`, prompts in
-English). Each line has this structure:
+One JSON object per line, 50 cases (`eval-001`…`eval-050`, prompts in English). Each line has this structure:
 
 | Field | Type | Description |
 |---|---|---|
-| `id` | string | Stable case id, referenced by runs and scores. |
+| `id` | string | Stable case id, for referencing in runs and scores. |
 | `prompt` | string | Initial user message, written as a realistic user would. |
 | `personality` | string | Hidden user profile shown **only** to the simulator LLM (never to the system): latent preferences for intermediate decisions, and mid-conversation changes (destination/duration/budget switches) where applicable. |
 | `expected.destination` | string \| null | Fixed destination, or `null` for open cases that must go through `destination_research`. |
@@ -347,7 +256,7 @@ English). Each line has this structure:
 | `expected.currency` | string \| null | Budget currency (or `null` together with budget). |
 | `expected.travelers` | number \| null | Party size, or `null` when unspecified. |
 | `expected.dates` | string \| null | Dates/duration in free text. |
-| `expected.must_satisfy` | string[] | 2–5 atomic, checkable conditions (one fact each) against the final `requirements` + `trip_plan`. The Jev judge asks one yes/no question per condition. `expected` always reflects the **final** state after any mid-conversation change, not the initial prompt. |
+| `expected.must_satisfy` | string[] | 2–5 atomic, checkable conditions (one fact each) against the final `requirements` + `trip_plan`. The future Jev judge would ask one yes/no question per condition. `expected` always reflects the **final** state after any mid-conversation change, not the initial prompt. |
 
 ### Case coverage groups
 
@@ -362,81 +271,133 @@ English). Each line has this structure:
 | `eval-043`–`eval-046` | Single category | Partial subagent use: activities only, transport only, accommodation only, day trip without overnight stay. |
 | `eval-047`–`eval-050` | Adversarial / edge cases | Past dates, fictional destination, near-empty prompt (must ask, not guess), last-minute full booking. |
 
----
+## 11. Project Structure
 
-## 13. Development Phases
+```text
+src/
+  backend/app/
+    agents/       # graph.py, state.py, nodes/, subagents/, tools/, ai_models/, mcp/, usage.py
+    api/          # FastAPI router + v1 (conversations, plans, streaming, schemas…)
+    database/     # engine, models, repositories, checkpointer (AsyncSqliteSaver)
+    evals/        # evaluation dataset (dataset.jsonl)
+    main.py       # lifespan: init DB → load MCP tools → build one shared graph
+  frontend/src/
+    views/        # ChatView, ConversationsView, PlansView, PlanDetailView
+    components/   # chat/, layout/, sidebar/, travel-state/
+    stores/       # travel.ts (chat state) + travelEvents.ts (SSE translator) + library/ui
+    api/          # REST client, SSE stream, travelService gateway
+    router/ types/ utils/ composables/
+notebooks/        # legacy phase 1–5 prototype (superseded by src/)
+docs/architecture.md
+docker-compose.yml  # backend :8000 + frontend :8080, backend-data volume
+```
+
+| Path | Purpose |
+|---|---|
+| `agents/graph.py` | Wires nodes + conditional edges and compiles the shared app. No node logic lives here. |
+| `agents/state.py` | `TravelState` schema, plan/option models, reducers (per-category and per-group merge). |
+| `agents/nodes/` | One module per graph node: extract, router, destination research + decision wait, orchestrator, main LLM. |
+| `agents/subagents/` | One ReAct subgraph per research specialty; `_base.py` holds the shared loop. |
+| `agents/tools/` | LLM-callable plan/requirement tools (`plan.py`, `requirements.py`) — deterministic by design. |
+| `agents/ai_models/` | Model tiers (`llm.py`) and Jev decision routing (`jev.py`). |
+| `agents/mcp/` | Server registry + best-effort loader; unreachable servers are skipped, never fatal. |
+| `agents/usage.py` | Token/cost accounting per message, aggregated into the turn `stats` event. |
+| `api/v1/streaming.py` | Runs one graph turn and translates node updates into SSE events for the UI. |
+| `api/v1/conversations.py` + `plans.py` | REST endpoints: conversations/messages, deterministic `POST /choices`, saved plans, titles. |
+| `database/` | SQLite engine + models (`conversations`, `messages`), CRUD helpers, LangGraph checkpointer. |
+| `views/` | One route per screen: active trip chat, conversation history, saved-plans library + detail. |
+| `components/chat/` | Message list, composer, destination carousel, priced-option controls, subagent accordions. |
+| `stores/travel.ts` | Client chat state: messages, requirements, options, plan, budget. |
+| `stores/travelEvents.ts` | Translates the 14 SSE event types into store updates (owns per-turn buffers). |
+| `api/travelService.ts` | The only gateway to the backend; every REST/SSE call goes through it. |
+
+## 12. Development Phases
+
+This section records the development plan and the phases the project has gone through, in order — what was built at each step and what is still open. Checked items are done; unchecked items are pending or deliberately dropped (noted as such).
 
 ### Phase 1 — Initial Travel Agent
-- Build a simple LLM-based Travel Planner.
-- Define system prompt, personality, tone, and response format.
-- Test with realistic travel scenarios.
+
+- [x] Create the basic LLM chat loop
+- [x] Add the initial system prompt
+- [x] Refine the Travel Planner's personality and tone
+- [x] Test and refine the agent with realistic travel scenarios
 
 ### Phase 2 — Structured Travel State
-- Define the shared `TravelState`.
-- Extract and maintain structured user requirements.
-- Update the `TravelState` accross interactions.
+
+- [x] Define the initial `TravelState`
+- [x] Make the Travel Planner produce structured requirements
+- [x] Store the structured requirements in the graph state
+- [x] Add LangGraph checkpointing
+- [x] Verify that travel state persists across interactions
+- [x] Verify that travel state updates when needed
 
 ### Phase 3 — External Capabilities
-- Integrate Weather MCP.
-- Build the custom Maps MCP.
-- Integrate trvl MCP.
-- Integrate TicketLens MCP.
-- Evaluate the impact of external data on recommendations.
+
+- [x] Integrate the Weather MCP into the existing graph
+- [x] Use weather data in destination recommendations
+- [x] Integrate the trvl CLI (single `travel` router tool)
+- [x] Use real travel data in the planning process
+- [x] Integrate the TicketLens MCP
+- [x] Use activity data in destination recommendations
+- [x] Integrate the OctoTrip Rental Cars MCP
+- [x] Use rental car data in destination recommendations
+- [ ] Custom Maps MCP — dropped, trvl + TicketLens cover the need
 
 ### Phase 4 — Destination Research
-- Implement candidate destination generation.
-- Research and compare destinations.
-- Select the most suitable destination.
+
+- [x] Add an initial requirements extraction node
+- [x] Add router node for deciding whether destination research is needed
+- [x] Generate a shortlist of candidate destinations
+- [x] Score and compare candidate destinations
+- [x] Let the user pick one (`interrupt` / resume, `Let's go with …`)
 
 ### Phase 5 — Parallel Multi-Agent Research
-- Orchestrate specialized travel-research agents.
-- Execute selected agents in parallel and collect their results.
-- Synthesize specialist research with the main Travel Planner.
+
+- [x] Orchestrate specialized travel-research subagents and execute them in parallel
+- [x] Implement iterative MCP tool use within each subagent and store their results in the shared state
+- [x] Pass the available research results to the main LLM for final synthesis
 
 ### Phase 6 — Plan & Budget
-- Define the structured travel-plan representation.
-- Generate a complete itinerary from the research results.
-- Implement deterministic budget calculation.
-- Implement constraint validation.
-- Implement trip scoring and plan selection.
 
-### Phase 7 — Critic & Replanning
-- Introduce the Travel Critic Agent.
-- Evaluate generated travel plans against requirements.
-- Add conditional routing and bounded replanning loops.
-- Refine plans when constraints are violated or recommendations are weak.
+- [x] Define the structured travel-plan representation
+- [x] Generate a complete plan from the research results
+- [x] Add deterministic budget calculation (`plan_total`)
+- [ ] Constraint validation / trip scoring — dropped, covered by human-in-the-loop instead (user picks from priced options)
 
-### Phase 8 — Conversational Web Prototype
-- Expose the LangGraph workflow through a minimal web interface.
-- Build a conversational chat interface for multi-turn planning.
-- Support LangGraph interrupts, resume, and thread-based conversations.
-- Display the current travel requirements and planning state for debugging.
-- Display itinerary, budget, validation, and research results.
-- Use the prototype as the main environment for end-to-end testing.
+### Phase 7 — Conversational Web Prototype
 
-### Phase 9 — Persistence & Production Backend
-- Add SQLite persistence (`app.db` + `checkpoints.db`, SQLAlchemy).
-- Integrate persistent LangGraph checkpointing (`AsyncSqliteSaver`).
-- Persist conversations, message history, requirements, research, and itineraries.
-- Conversation list + thread rehydration in the web app.
-- Build the production FastAPI backend.
-- Connect the web application to persistent data.
+- [x] Create initial frontend prototype (Vue 3 + PrimeVue + Pinia)
+- [x] Expose the LangGraph workflow through a minimal web interface
+- [x] Build the conversational chat interface
+- [x] Support multi-turn conversations and LangGraph interrupts/resume
+- [x] Display subagents responses as complementary info
+- [x] Support thread-based conversations
+- [x] Display current travel requirements and planning state
+- [x] Let users pick research options in the chat (human-in-the-loop implementation)
+- [x] Display trip plan and budget information
+- [x] Allow saving the current trip plan to the "Saved plans" library
+- [x] Use the prototype as the main environment for end-to-end testing
+
+### Phase 8 — Persistence & Production Backend
+
+- [x] Persist sessions, requirements, research, and trip plans in SQLite
+- [x] Add production-oriented LangGraph checkpointing (`AsyncSqliteSaver`)
+- [x] Expose the planning workflow through FastAPI (REST + SSE)
+- [x] Connect the web application to persistent backend data
+- [x] Conversation list + thread rehydration in the web app
 
 ### Phase 9 — Observability & Evaluation
-- Integrate LangSmith.
-- Build an evaluation dataset.
-- Measure constraint satisfaction, groundedness,
-  recommendation quality, and replanning success.
 
-### Phase 10 — Observability, Evaluation & Release
-- Integrate LangSmith tracing.
-- Build an evaluation dataset.
-- Measure constraint satisfaction, groundedness, recommendation quality,
-  replanning success, latency, token usage, and tool usage.
-- Add unit and integration tests.
-- Improve error handling and edge cases.
-- Optimize latency and cost.
-- Complete documentation and architecture diagrams.
-- Add deployment configuration.
-- Deploy and publish the project.
+- [x] Integrate LangSmith tracing
+- [x] Create a representative evaluation dataset (50 cases)
+- [x] Measure latency, token usage, and cost (per-turn `stats`)
+- [ ] Automated evaluation of generated plans (Jev-as-judge)
+- [ ] Decide which agent metrics to evaluate
 
+### Phase 10 — Release
+
+- [x] Add Docker deployment (backend + frontend images, compose with persistent SQLite)
+- [x] Cost-optimize the full pipeline (model tiers, Jev routing, provider pinning, token budgets)
+- [x] Complete documentation and architecture diagrams
+- [ ] Deploy a public demo
+- [ ] Publish the first release

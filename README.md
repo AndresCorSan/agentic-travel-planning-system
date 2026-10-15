@@ -16,8 +16,9 @@
 
 - **Cost-optimized by design.** Runs on cheap OpenRouter models (`z-ai/glm-5.3-flash`, `gemma-3-12b-it`) and gets its quality from tight LangGraph workflow control instead of raw model size: small scoped prompts, capped input/output tokens per node, deterministic tools for prices/totals.
 - **Right model tier per task.** Full model for synthesis, minimal-reasoning for requirements extraction and subagent tool loops, light model for routing fallback — never a big model for a small job. Every call goes through OpenRouter, so models and providers are plain IDs and swappable in one line — no vendor lock-in when something better appears.
+- **Parallel multi-agent research.** An orchestrator fans out to 5 specialist ReAct subagents (weather, transport, accommodation, activities, rental cars) running in parallel over MCP tools. A main LLM then gathers the findings into one reply with priced options for the user to pick from.
 - **Jev decision-model routing.** The router uses a Jev decision call (with chat-LLM fallback) instead of burning a full generation on every turn — cheaper and faster for a step that only picks the next route.
-- **Human-in-the-loop UI.** The agent proposes, you dispose: destinations and priced options render as clickable cards/buttons, and your picks are saved deterministically — the LLM confirms, it never invents prices.
+- **Human-in-the-loop UI.** The agent proposes options, you pick from clickable cards/buttons: destinations and priced options render as choice controls, and your picks are saved deterministically — the LLM confirms, it never invents prices.
 - **Observability with LangSmith and cost-per-turn tracing.** LangSmith tracing plus a `stats` event after every turn: tokens in/out, authoritative OpenRouter cost (`cost_usd`) and duration, shown under each assistant message.
 
 <sub>* Per-token cost is roughly 15–20× below frontier flagships (≈ $0.15/$0.50 per 1M in/out for GLM-5.3-Flash depending on provider, vs $2/$10 for GPT-6.1 Sol at current OpenRouter rates).</sub>
@@ -48,18 +49,12 @@ Example:
 
 ## Architecture
 
-```text
-user message (SSE)
-  → extract_requirements → router
-    → destination_research → interrupt (wait for pick) → resume
-    → orchestrator → weather / transport / accommodation / activities / rental-cars (parallel)
-  → main_llm (streams tokens, publishes options, edits plan)
-```
+<img src="docs/images/LangGraph_Workflow.png" width="800">
 
 - One shared LangGraph app built at startup; `thread_id = conversation_id`.
 - Destination pick pauses via `interrupt()` and resumes on the next turn; saved-choices confirmations skip extract + router and go straight to main_llm.
 - Frontend: Vue 3 chat + requirements panel + plan/budget sidebar + saved-plans library.
-- Details: [`docs/architecture.md`](docs/architecture.md).
+- Full graph diagram + node reference: [`docs/architecture.md` §4 LangGraph Workflow](docs/architecture.md#4-langgraph-workflow).
 
 ## Tech stack
 
@@ -74,7 +69,7 @@ user message (SSE)
 
 ## Quickstart
 
-Prereq: an [OpenRouter](https://openrouter.ai/) API key.
+Prereqs: [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Engine + Compose v2) and an [OpenRouter](https://openrouter.ai/) API key. No local Python/Node needed — everything runs in containers.
 
 ```bash
 # 1. Secrets (gitignored, never committed)
@@ -92,8 +87,8 @@ First backend boot takes ~30s (downloads weather MCP via `npx`, loads all MCP to
 Watch for `MCP tools ready` + `Graph built` in `docker compose logs backend`.
 Data persists in the `backend-data` volume (`down -v` resets it).
 
-Local dev: backend `uv run uvicorn app.main:app --port 8000` from `src/backend`;
-frontend `npm run dev` from `src/frontend` (`http://localhost:5173`).
+Local dev (needs [`uv`](https://docs.astral.sh/uv/) + Node 22+): backend `uv run uvicorn app.main:app --port 8000` from `src/backend` (deps sync automatically);
+frontend `npm install && npm run dev` from `src/frontend` (`http://localhost:5173`).
 
 ## Project structure
 
@@ -105,7 +100,7 @@ docs/architecture.md
 docker-compose.yml
 ```
 
-Legacy `notebooks/` holds the incremental prototypes from the early development phases; `src/` is the current full app. More in `docs/architecture.md` (project structure docs to be expanded there).
+Legacy `notebooks/` holds the incremental prototypes from the early development phases; `src/` is the current full app. Full breakdown in [`docs/architecture.md` §11 Project Structure](docs/architecture.md#11-project-structure).
 
 ## Known issues
 
