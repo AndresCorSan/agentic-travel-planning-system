@@ -399,5 +399,5 @@ This section records the development plan and the phases the project has gone th
 - [x] Add Docker deployment (backend + frontend images, compose with persistent SQLite)
 - [x] Cost-optimize the full pipeline (model tiers, Jev routing, provider pinning, token budgets)
 - [x] Complete documentation and architecture diagrams
-- [ ] Deploy a public demo
-- [ ] Publish the first release
+- [x] Deploy a public demo
+- [x] Publish the first release
