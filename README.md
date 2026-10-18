@@ -73,7 +73,7 @@ Prereqs: [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or E
 
 ```bash
 # 1. Secrets (gitignored, never committed)
-echo "OPENROUTER_API_KEY=sk-or-v1-..." > .env
+Copy-Item .env.example .env   # then set OPENROUTER_API_KEY inside
 
 # 2. Run
 docker compose up --build
@@ -87,8 +87,8 @@ First backend boot takes ~30s (downloads weather MCP via `npx`, loads all MCP to
 Watch for `MCP tools ready` + `Graph built` in `docker compose logs backend`.
 Data persists in the `backend-data` volume (`down -v` resets it).
 
-Local dev (needs [`uv`](https://docs.astral.sh/uv/) + Node 22+): backend `uv run uvicorn app.main:app --port 8000` from `src/backend` (deps sync automatically);
-frontend `npm install && npm run dev` from `src/frontend` (`http://localhost:5173`).
+Local dev (needs [`uv`](https://docs.astral.sh/uv/) + Node 22+): backend `uv run uvicorn app.main:app --port 8000` from `src/backend` (deps sync automatically; install the `trvl` CLI on PATH for full research — otherwise those agents stay off);
+frontend: create `src/frontend/.env` with `VITE_API_BASE_URL=http://localhost:8000/api/v1`, then `npm install && npm run dev` from `src/frontend` (`http://localhost:5173`).
 
 ## Project structure
 
