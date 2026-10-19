@@ -26,9 +26,7 @@
 
 ## Demo
 
-<!-- ![Chat demo](docs/assets/demo.png) -->
-
-> Video walkthrough — coming soon. Working on it.
+[![View project demo](docs/images/demo_agentic-travel-planning-system-Cover.png)](https://youtu.be/1rxgV_XDVNo)
 
 ## What it does
 
