@@ -34,8 +34,13 @@ MCP_SERVERS = {
         "args": ["mcp"],
     },
     "octotrip-rental-cars": {
-        "transport": "http",
+        "transport": "streamable_http",
         "url": "https://mcp.octotrip.app/rental-cars/mcp",
+        "headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/130.0.0.0 Safari/537.36",
+        },
     },
 }
 
