@@ -105,17 +105,46 @@ const images = ref<Record<string, string>>({});
 const pending = ref<Record<string, boolean>>({});
 const failed = new Set<string>();
 
+async function thumbFor(title: string): Promise<string | null> {
+  try {
+    const url =
+      'https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&prop=pageimages' +
+      `&redirects=1&titles=${encodeURIComponent(title)}&formatversion=2&pithumbsize=600`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const thumb = data?.query?.pages?.[0]?.thumbnail?.source;
+    return typeof thumb === 'string' && thumb ? thumb : null;
+  } catch {
+    return null;
+  }
+}
+
+async function searchTitle(d: Destination): Promise<string | null> {
+  try {
+    const q = d.country ? `${d.name} ${d.country}` : d.name;
+    const url =
+      'https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&list=search' +
+      `&srsearch=${encodeURIComponent(q)}&srlimit=1&formatversion=2`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const title = data?.query?.search?.[0]?.title;
+    return typeof title === 'string' && title ? title : null;
+  } catch {
+    return null;
+  }
+}
+
 async function resolveImage(d: Destination) {
   if (!d.name || images.value[d.id] || pending.value[d.id] || failed.has(d.id)) return;
   pending.value[d.id] = true;
   try {
-    const url =
-      'https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&prop=pageimages' +
-      `&titles=${encodeURIComponent(d.name)}&formatversion=2&pithumbsize=600`;
-    const res = await fetch(url);
-    const data = await res.json();
-    const thumb = data?.query?.pages?.[0]?.thumbnail?.source;
-    if (typeof thumb === 'string' && thumb) images.value[d.id] = thumb;
+    let thumb = await thumbFor(d.name);
+    if (!thumb && d.country) thumb = await thumbFor(`${d.name}, ${d.country}`);
+    if (!thumb) {
+      const title = await searchTitle(d);
+      if (title) thumb = await thumbFor(title);
+    }
+    if (thumb) images.value[d.id] = thumb;
     else failed.add(d.id);
   } catch {
     failed.add(d.id);
